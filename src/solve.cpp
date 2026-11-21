@@ -12,7 +12,7 @@
 
 
 
-namespace keel {
+namespace keel::linalg {
 
 namespace {
 
@@ -48,9 +48,9 @@ bool lu_recursive_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, 
     const keel::usize base_n = (m >= 256) ? 32 : 128;
     if (n <= base_n) {
         if constexpr (keel::IsSame<T, double>) {
-            return keel::lu_panel(reinterpret_cast<double*>(A), lda, piv, m, n, offset_row);
+            return keel::linalg::lu_panel(reinterpret_cast<double*>(A), lda, piv, m, n, offset_row);
         } else {
-            return keel::lu_panel(reinterpret_cast<keel::c64*>(A), lda, piv, m, n, offset_row);
+            return keel::linalg::lu_panel(reinterpret_cast<keel::c64*>(A), lda, piv, m, n, offset_row);
         }
     }
 
@@ -63,7 +63,7 @@ bool lu_recursive_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, 
 
     // 2. Apply permutations piv[0..n1-1] to right panel A2 (m x n2)
     const keel::usize p2_thresh = (n2 >= 64) ? 32 : (n2 + 1);
-    keel::linalg_detail::parallel_for(n2, p2_thresh, [=](keel::usize c_start, keel::usize c_end) {
+    keel::linalg::linalg_detail::parallel_for(n2, p2_thresh, [=](keel::usize c_start, keel::usize c_end) {
         for (keel::usize col = c_start; col < c_end; ++col) {
             T *col_ptr = A + (n1 + col) * lda;
             for (keel::usize i = 0; i < n1; ++i) {
@@ -79,12 +79,12 @@ bool lu_recursive_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, 
     T *L11 = A;
     T *A12 = A + n1 * lda;
     if constexpr (is_complex_v<T>) {
-        keel::trsm(MatrixSide::Left, MatrixUplo::Lower, MatrixTranspose::NoTrans, MatrixDiag::Unit,
+        keel::linalg::trsm(MatrixSide::Left, MatrixUplo::Lower, MatrixTranspose::NoTrans, MatrixDiag::Unit,
                            n1, n2, keel::c64(1.0, 0.0),
                            reinterpret_cast<const keel::c64*>(L11), lda,
                            reinterpret_cast<keel::c64*>(A12), lda);
     } else {
-        keel::trsm(MatrixSide::Left, MatrixUplo::Lower, MatrixTranspose::NoTrans, MatrixDiag::Unit,
+        keel::linalg::trsm(MatrixSide::Left, MatrixUplo::Lower, MatrixTranspose::NoTrans, MatrixDiag::Unit,
                            n1, n2, 1.0, reinterpret_cast<double*>(L11), lda, reinterpret_cast<double*>(A12), lda);
     }
 
@@ -95,13 +95,13 @@ bool lu_recursive_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, 
     const keel::usize rem_rows = m - n1;
 
     if constexpr (is_complex_v<T>) {
-        keel::gemm(MatrixTranspose::NoTrans, MatrixTranspose::NoTrans, rem_rows, n2, n1, keel::c64(-1.0, 0.0),
+        keel::linalg::gemm(MatrixTranspose::NoTrans, MatrixTranspose::NoTrans, rem_rows, n2, n1, keel::c64(-1.0, 0.0),
                            reinterpret_cast<const keel::c64*>(L21), lda,
                            reinterpret_cast<const keel::c64*>(U12), lda,
                            keel::c64(1.0, 0.0),
                            reinterpret_cast<keel::c64*>(A22), lda);
     } else {
-        keel::gemm(MatrixTranspose::NoTrans, MatrixTranspose::NoTrans, rem_rows, n2, n1, -1.0,
+        keel::linalg::gemm(MatrixTranspose::NoTrans, MatrixTranspose::NoTrans, rem_rows, n2, n1, -1.0,
                            reinterpret_cast<const double*>(L21), lda,
                            reinterpret_cast<const double*>(U12), lda,
                            1.0,
@@ -113,7 +113,7 @@ bool lu_recursive_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, 
 
     // 6. Apply permutations piv[n1..n-1] to left panel L21 ((m - n1) x n1)
     const keel::usize p6_thresh = (n1 >= 64) ? 32 : (n1 + 1);
-    keel::linalg_detail::parallel_for(n1, p6_thresh, [=](keel::usize c_start, keel::usize c_end) {
+    keel::linalg::linalg_detail::parallel_for(n1, p6_thresh, [=](keel::usize c_start, keel::usize c_end) {
         for (keel::usize col = c_start; col < c_end; ++col) {
             T *col_ptr = A + n1 + col * lda;
             for (keel::usize i = 0; i < n2; ++i) {
@@ -215,7 +215,7 @@ bool la_solve_small_fastpath(const T *A, keel::usize lda,
     }
 
     if constexpr (keel::IsSame<T, double>) {
-        if (!keel::lu_panel(LU_stack, n, piv_stack, n, n, 0)) return false;
+        if (!keel::linalg::lu_panel(LU_stack, n, piv_stack, n, n, 0)) return false;
     } else {
         if (!lu_recursive_inplace(LU_stack, n, piv_stack, n, n, 0)) return false;
     }
@@ -316,7 +316,7 @@ bool la_solve_small_fastpath(const T *A, keel::usize lda,
                 double *y_ptr = x_col;
                 const keel::usize rem = n - (k + 1);
                 const double neg_x = -xkj;
-                keel::axpy(rem, neg_x, l_col + (k + 1), y_ptr + (k + 1));
+                keel::linalg::axpy(rem, neg_x, l_col + (k + 1), y_ptr + (k + 1));
             } else {
                 for (keel::usize i = k + 1; i < n; ++i) {
                     x_col[i] -= LU_stack[i + k * n] * xkj;
@@ -332,7 +332,7 @@ bool la_solve_small_fastpath(const T *A, keel::usize lda,
                 double *y_ptr = x_col;
                 const keel::usize rem = static_cast<keel::usize>(k);
                 const double neg_x = -xkj;
-                keel::axpy(rem, neg_x, u_col, y_ptr);
+                keel::linalg::axpy(rem, neg_x, u_col, y_ptr);
             } else {
                 for (keel::isize i = k - 1; i >= 0; --i) {
                     x_col[i] -= LU_stack[i + k * n] * xkj;
@@ -348,9 +348,9 @@ template <typename T>
 void trsm_L_recursive(keel::usize m, keel::usize n, const T* A, keel::usize lda, T* B, keel::usize ldb) {
     if (m <= 16) {
         if constexpr (is_complex_v<T>) {
-            keel::trsm(MatrixSide::Left, MatrixUplo::Lower, MatrixTranspose::NoTrans, MatrixDiag::Unit, m, n, keel::c64(1,0), reinterpret_cast<const keel::c64*>(A), lda, reinterpret_cast<keel::c64*>(B), ldb);
+            keel::linalg::trsm(MatrixSide::Left, MatrixUplo::Lower, MatrixTranspose::NoTrans, MatrixDiag::Unit, m, n, keel::c64(1,0), reinterpret_cast<const keel::c64*>(A), lda, reinterpret_cast<keel::c64*>(B), ldb);
         } else {
-            keel::trsm(MatrixSide::Left, MatrixUplo::Lower, MatrixTranspose::NoTrans, MatrixDiag::Unit, m, n, 1.0, A, lda, B, ldb);
+            keel::linalg::trsm(MatrixSide::Left, MatrixUplo::Lower, MatrixTranspose::NoTrans, MatrixDiag::Unit, m, n, 1.0, A, lda, B, ldb);
         }
         return;
     }
@@ -358,9 +358,9 @@ void trsm_L_recursive(keel::usize m, keel::usize n, const T* A, keel::usize lda,
     keel::usize m2 = m - m1;
     trsm_L_recursive(m1, n, A, lda, B, ldb);
     if constexpr (is_complex_v<T>) {
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m2, n, m1, keel::c64(-1,0), reinterpret_cast<const keel::c64*>(A + m1), lda, reinterpret_cast<const keel::c64*>(B), ldb, keel::c64(1,0), reinterpret_cast<keel::c64*>(B + m1), ldb);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m2, n, m1, keel::c64(-1,0), reinterpret_cast<const keel::c64*>(A + m1), lda, reinterpret_cast<const keel::c64*>(B), ldb, keel::c64(1,0), reinterpret_cast<keel::c64*>(B + m1), ldb);
     } else {
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m2, n, m1, -1.0, A + m1, lda, B, ldb, 1.0, B + m1, ldb);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m2, n, m1, -1.0, A + m1, lda, B, ldb, 1.0, B + m1, ldb);
     }
     trsm_L_recursive(m2, n, A + m1 + m1 * lda, lda, B + m1, ldb);
 }
@@ -369,9 +369,9 @@ template <typename T>
 void trsm_U_recursive(keel::usize m, keel::usize n, const T* A, keel::usize lda, T* B, keel::usize ldb) {
     if (m <= 16) {
         if constexpr (is_complex_v<T>) {
-            keel::trsm(MatrixSide::Left, MatrixUplo::Upper, MatrixTranspose::NoTrans, MatrixDiag::NonUnit, m, n, keel::c64(1,0), reinterpret_cast<const keel::c64*>(A), lda, reinterpret_cast<keel::c64*>(B), ldb);
+            keel::linalg::trsm(MatrixSide::Left, MatrixUplo::Upper, MatrixTranspose::NoTrans, MatrixDiag::NonUnit, m, n, keel::c64(1,0), reinterpret_cast<const keel::c64*>(A), lda, reinterpret_cast<keel::c64*>(B), ldb);
         } else {
-            keel::trsm(MatrixSide::Left, MatrixUplo::Upper, MatrixTranspose::NoTrans, MatrixDiag::NonUnit, m, n, 1.0, A, lda, B, ldb);
+            keel::linalg::trsm(MatrixSide::Left, MatrixUplo::Upper, MatrixTranspose::NoTrans, MatrixDiag::NonUnit, m, n, 1.0, A, lda, B, ldb);
         }
         return;
     }
@@ -379,9 +379,9 @@ void trsm_U_recursive(keel::usize m, keel::usize n, const T* A, keel::usize lda,
     keel::usize m2 = m - m1;
     trsm_U_recursive(m2, n, A + m1 + m1 * lda, lda, B + m1, ldb);
     if constexpr (is_complex_v<T>) {
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m1, n, m2, keel::c64(-1,0), reinterpret_cast<const keel::c64*>(A + m1 * lda), lda, reinterpret_cast<const keel::c64*>(B + m1), ldb, keel::c64(1,0), reinterpret_cast<keel::c64*>(B), ldb);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m1, n, m2, keel::c64(-1,0), reinterpret_cast<const keel::c64*>(A + m1 * lda), lda, reinterpret_cast<const keel::c64*>(B + m1), ldb, keel::c64(1,0), reinterpret_cast<keel::c64*>(B), ldb);
     } else {
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m1, n, m2, -1.0, A + m1 * lda, lda, B + m1, ldb, 1.0, B, ldb);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m1, n, m2, -1.0, A + m1 * lda, lda, B + m1, ldb, 1.0, B, ldb);
     }
     trsm_U_recursive(m1, n, A, lda, B, ldb);
 }
@@ -399,7 +399,7 @@ void trsm_L_blocked_seq(keel::usize n, keel::usize nrhs, const T *A, keel::usize
                 if (xkc != T(0)) {
                     if constexpr (keel::IsSame<T, double>) {
                         if (jb > k + 1) {
-                            keel::axpy(jb - (k + 1), -xkc, reinterpret_cast<const double*>(l_col + j + k + 1), reinterpret_cast<double*>(B + j + k + 1 + c * ldb));
+                            keel::linalg::axpy(jb - (k + 1), -xkc, reinterpret_cast<const double*>(l_col + j + k + 1), reinterpret_cast<double*>(B + j + k + 1 + c * ldb));
                         }
                     } else {
                         for (keel::usize i = k + 1; i < jb; ++i) {
@@ -416,13 +416,13 @@ void trsm_L_blocked_seq(keel::usize n, keel::usize nrhs, const T *A, keel::usize
             T* B2 = B + (j + jb);
             
             if constexpr (keel::IsSame<T, double>) {
-                keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, rem_m, nrhs, jb, -1.0, 
+                keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, rem_m, nrhs, jb, -1.0, 
                                   reinterpret_cast<const double*>(L21), lda, 
                                   reinterpret_cast<const double*>(B + j), ldb, 
                                   1.0, 
                                   reinterpret_cast<double*>(B2), ldb);
             } else {
-                keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, rem_m, nrhs, jb, keel::c64(-1.0, 0.0), 
+                keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, rem_m, nrhs, jb, keel::c64(-1.0, 0.0), 
                                   reinterpret_cast<const keel::c64*>(L21), lda, 
                                   reinterpret_cast<const keel::c64*>(B + j), ldb, 
                                   keel::c64(1.0, 0.0), 
@@ -450,7 +450,7 @@ void trsm_U_blocked_seq(keel::usize n, keel::usize nrhs, const T *A, keel::usize
                 if (xkc != T(0)) {
                     if constexpr (keel::IsSame<T, double>) {
                         if (k > 0) {
-                            keel::axpy(k, -xkc, reinterpret_cast<const double*>(u_col + j), reinterpret_cast<double*>(B + j + c * ldb));
+                            keel::linalg::axpy(k, -xkc, reinterpret_cast<const double*>(u_col + j), reinterpret_cast<double*>(B + j + c * ldb));
                         }
                     } else {
                         for (keel::usize i = 0; i < k; ++i) {
@@ -467,13 +467,13 @@ void trsm_U_blocked_seq(keel::usize n, keel::usize nrhs, const T *A, keel::usize
             T* B1 = B;
             
             if constexpr (keel::IsSame<T, double>) {
-                keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, rem_m, nrhs, jb, -1.0, 
+                keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, rem_m, nrhs, jb, -1.0, 
                                   reinterpret_cast<const double*>(U12), lda, 
                                   reinterpret_cast<const double*>(B + j), ldb, 
                                   1.0, 
                                   reinterpret_cast<double*>(B1), ldb);
             } else {
-                keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, rem_m, nrhs, jb, keel::c64(-1.0, 0.0), 
+                keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, rem_m, nrhs, jb, keel::c64(-1.0, 0.0), 
                                   reinterpret_cast<const keel::c64*>(U12), lda, 
                                   reinterpret_cast<const keel::c64*>(B + j), ldb, 
                                   keel::c64(1.0, 0.0), 
@@ -506,7 +506,7 @@ bool lu_blocked_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, ke
         // Apply permutations piv[j..j+jb-1] to left panel columns 0..j-1
         if (j > 0) {
             const keel::usize p_left_thresh = (j >= 64) ? 32 : (j + 1);
-            keel::linalg_detail::parallel_for(j, p_left_thresh, [=](keel::usize c_start, keel::usize c_end) {
+            keel::linalg::linalg_detail::parallel_for(j, p_left_thresh, [=](keel::usize c_start, keel::usize c_end) {
                 for (keel::usize col = c_start; col < c_end; ++col) {
                     T *col_ptr = A + j + col * lda;
                     for (keel::usize i = 0; i < jb; ++i) {
@@ -525,7 +525,7 @@ bool lu_blocked_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, ke
 
             // Apply permutations to trailing matrix A_right (cache-friendly column major traversal)
             const keel::usize p_thresh = (rem_n >= 64) ? 32 : (rem_n + 1);
-            keel::linalg_detail::parallel_for(rem_n, p_thresh, [=](keel::usize c_start, keel::usize c_end) {
+            keel::linalg::linalg_detail::parallel_for(rem_n, p_thresh, [=](keel::usize c_start, keel::usize c_end) {
                 for (keel::usize col = c_start; col < c_end; ++col) {
                     T *col_ptr = A_right + col * lda;
                     for (keel::usize i = 0; i < jb; ++i) {
@@ -541,12 +541,12 @@ bool lu_blocked_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, ke
             T *L11 = A_jj;
             T *U12 = A_right;
             if constexpr (is_complex_v<T>) {
-                keel::trsm(keel::MatrixSide::Left, keel::MatrixUplo::Lower, keel::MatrixTranspose::NoTrans, keel::MatrixDiag::Unit,
+                keel::linalg::trsm(keel::linalg::MatrixSide::Left, keel::linalg::MatrixUplo::Lower, keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixDiag::Unit,
                           jb, rem_n, keel::c64(1.0, 0.0), reinterpret_cast<const keel::c64*>(L11), lda,
                           reinterpret_cast<keel::c64*>(U12), lda);
                 if (rem_m > jb) {
                     // GEMM: A22 -= L21 * U12
-                    keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans,
+                    keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans,
                               rem_m - jb, rem_n, jb, keel::c64(-1.0, 0.0),
                               reinterpret_cast<const keel::c64*>(L11 + jb), lda,
                               reinterpret_cast<const keel::c64*>(U12), lda,
@@ -554,12 +554,12 @@ bool lu_blocked_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, ke
                               reinterpret_cast<keel::c64*>(U12 + jb), lda);
                 }
             } else {
-                keel::trsm(keel::MatrixSide::Left, keel::MatrixUplo::Lower, keel::MatrixTranspose::NoTrans, keel::MatrixDiag::Unit,
+                keel::linalg::trsm(keel::linalg::MatrixSide::Left, keel::linalg::MatrixUplo::Lower, keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixDiag::Unit,
                           jb, rem_n, 1.0, reinterpret_cast<const double*>(L11), lda,
                           reinterpret_cast<double*>(U12), lda);
                 if (rem_m > jb) {
                     // GEMM: A22 -= L21 * U12
-                    keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans,
+                    keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans,
                               rem_m - jb, rem_n, jb, -1.0,
                               reinterpret_cast<const double*>(L11 + jb), lda,
                               reinterpret_cast<const double*>(U12), lda,
@@ -593,7 +593,7 @@ bool la_solve_impl(const T *A, keel::usize m, keel::usize n, const T *B, keel::u
 
         const keel::i32 *piv_ptr = piv.data();
         const keel::usize p_thresh = (nrhs >= 64) ? 32 : (nrhs + 1);
-        keel::linalg_detail::parallel_for(nrhs, p_thresh, [=](keel::usize c_start, keel::usize c_end) {
+        keel::linalg::linalg_detail::parallel_for(nrhs, p_thresh, [=](keel::usize c_start, keel::usize c_end) {
             for (keel::usize col = c_start; col < c_end; ++col) {
                 T *col_ptr = X + col * n;
                 for (keel::usize k = 0; k < n; ++k) {
@@ -605,7 +605,7 @@ bool la_solve_impl(const T *A, keel::usize m, keel::usize n, const T *B, keel::u
             }
         });
 
-        keel::linalg_detail::parallel_for(nrhs, (nrhs >= 64) ? 16 : 1, [=, &A_lu](keel::usize c_start, keel::usize c_end) {
+        keel::linalg::linalg_detail::parallel_for(nrhs, (nrhs >= 64) ? 16 : 1, [=, &A_lu](keel::usize c_start, keel::usize c_end) {
             keel::usize cols = c_end - c_start;
             T* X_slice = X + c_start * n;
             trsm_L_blocked_seq(n, cols, A_lu.data(), n, X_slice, n);
@@ -713,4 +713,4 @@ bool matrix_inv(const c64* A, usize n, c64* A_inv, Allocator* alloc) noexcept {
     return matrix_inv_impl(A, n, A_inv, alloc);
 }
 
-} // namespace keel
+} // namespace keel::linalg

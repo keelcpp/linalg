@@ -2,7 +2,7 @@
 #include "keel/math.h"
 #include "linalg_internal.h"
 
-namespace keel {
+namespace keel::linalg {
 
 usize linalg_last_gemm_threads_used() noexcept {
     return linalg_detail::g_last_gemm_threads_used.load();
@@ -157,4 +157,4 @@ void gemv(MatrixTranspose trans, usize m, usize n, f64 alpha, const f64* A, usiz
     }
 }
 
-} // namespace keel
+} // namespace keel::linalg

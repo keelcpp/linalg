@@ -6,7 +6,7 @@
 #include <hwy/highway.h>
 
 HWY_BEFORE_NAMESPACE();
-namespace keel {
+namespace keel::linalg {
 namespace HWY_NAMESPACE {
 
 namespace hn = hwy::HWY_NAMESPACE;
@@ -75,11 +75,11 @@ void GerDoubleKernel(usize m, usize n, f64 alpha, const f64* x, usize incx, cons
 }
 
 } // namespace HWY_NAMESPACE
-} // namespace keel
+} // namespace keel::linalg
 HWY_AFTER_NAMESPACE();
 
 #if HWY_ONCE
-namespace keel {
+namespace keel::linalg {
 
 HWY_EXPORT(GemvDoubleKernel);
 HWY_EXPORT(GerDoubleKernel);
@@ -93,5 +93,5 @@ void ger(usize m, usize n, f64 alpha, const f64* x, usize incx, const f64* y, us
     HWY_DYNAMIC_DISPATCH(GerDoubleKernel)(m, n, alpha, x, incx, y, incy, A, lda);
 }
 
-} // namespace keel
+} // namespace keel::linalg
 #endif

@@ -1,7 +1,7 @@
 #include "keel/linalg.h"
 #include "linalg_internal.h"
 
-namespace keel {
+namespace keel::linalg {
 
 void gemv(usize m, usize n, f64 alpha, const f64* A, usize lda, const f64* x, usize incx, f64 beta, f64* y,
           usize incy) noexcept {
@@ -46,4 +46,4 @@ void ger(usize m, usize n, f64 alpha, const f64* x, usize incx, const f64* y, us
     });
 }
 
-} // namespace keel
+} // namespace keel::linalg

@@ -9,7 +9,7 @@
 
 #include <atomic>
 
-namespace keel::linalg_detail {
+namespace keel::linalg::linalg_detail {
 
 inline std::atomic<usize> g_last_gemm_threads_used{0};
 
@@ -36,4 +36,4 @@ template <typename T>
     return (a > b) ? a : b;
 }
 
-} // namespace keel::linalg_detail
+} // namespace keel::linalg::linalg_detail

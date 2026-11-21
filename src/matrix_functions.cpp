@@ -6,7 +6,7 @@
 #include "keel/math.h"
 #include "linalg_internal.h"
 
-namespace keel {
+namespace keel::linalg {
 
 namespace {
 
@@ -324,4 +324,4 @@ bool expmv(f64 t, const f64* A, usize n, const f64* v, f64* out, Allocator* allo
     return true;
 }
 
-} // namespace keel
+} // namespace keel::linalg

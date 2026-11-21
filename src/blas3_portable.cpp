@@ -6,7 +6,7 @@
 #include "keel/math.h"
 #include "linalg_internal.h"
 
-namespace keel {
+namespace keel::linalg {
 
 template <typename T>
 static constexpr bool is_complex_type_v = false;
@@ -42,7 +42,7 @@ void gemm_portable(MatrixTranspose transa, MatrixTranspose transb,
     const bool conj_b   = (transb == MatrixTranspose::ConjTrans);
 
     constexpr keel::usize kParallelThreshold = 256;
-    keel::linalg_detail::parallel_for(n, kParallelThreshold, [=](keel::usize j_start, keel::usize j_end) {
+    keel::linalg::linalg_detail::parallel_for(n, kParallelThreshold, [=](keel::usize j_start, keel::usize j_end) {
         for (keel::usize j = j_start; j < j_end; ++j) {
             for (keel::usize i = 0; i < m; ++i) {
                 T sum = T(0);
@@ -82,9 +82,9 @@ void gemm_portable(MatrixTranspose transa, MatrixTranspose transb,
 
     // Update global atomic for test determinism check
 #if defined(KEEL_LINALG_WITH_THREADS)
-    keel::linalg_detail::g_last_gemm_threads_used.store(static_cast<keel::i32>(keel::ThreadPool::global().num_workers()));
+    keel::linalg::linalg_detail::g_last_gemm_threads_used.store(static_cast<keel::i32>(keel::ThreadPool::global().num_workers()));
 #else
-    keel::linalg_detail::g_last_gemm_threads_used.store(1);
+    keel::linalg::linalg_detail::g_last_gemm_threads_used.store(1);
 #endif
 }
 
@@ -558,4 +558,4 @@ bool lu_panel(double *A, keel::usize lda, keel::i32 *piv, keel::usize m, keel::u
     return true;
 }
 
-} // namespace keel
+} // namespace keel::linalg

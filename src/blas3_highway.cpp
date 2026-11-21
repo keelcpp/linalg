@@ -12,7 +12,7 @@
 #include <hwy/highway.h>
 
 HWY_BEFORE_NAMESPACE();
-namespace keel {
+namespace keel::linalg {
 namespace HWY_NAMESPACE {
 
 namespace hn = hwy::HWY_NAMESPACE;
@@ -39,7 +39,7 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
                 }
             }
         }
-        keel::linalg_detail::g_last_gemm_threads_used.store(1);
+        keel::linalg::linalg_detail::g_last_gemm_threads_used.store(1);
         return;
     }
 
@@ -169,7 +169,7 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
             }
         }
 
-        keel::linalg_detail::g_last_gemm_threads_used.store(1);
+        keel::linalg::linalg_detail::g_last_gemm_threads_used.store(1);
         return;
     }
 
@@ -187,7 +187,7 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
     // Limit threads for small n to avoid redundant packing of A
     keel::i32 max_threads = static_cast<keel::i32>(keel::max<keel::usize>(1, n / 16));
 
-    keel::linalg_detail::parallel_for(n, p_thresh, [&](keel::usize jc_start, keel::usize jc_end) {
+    keel::linalg::linalg_detail::parallel_for(n, p_thresh, [&](keel::usize jc_start, keel::usize jc_end) {
         active_threads.fetch_add(1, std::memory_order_relaxed);
         const keel::usize mc_padded = ((mc_block + mr - 1) / mr) * mr;
         constexpr keel::usize nc_padded = ((nc_block + nr - 1) / nr) * nr;
@@ -321,7 +321,7 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
         }
     }, max_threads);
 
-    keel::linalg_detail::g_last_gemm_threads_used.store(active_threads.load());
+    keel::linalg::linalg_detail::g_last_gemm_threads_used.store(active_threads.load());
 }
 
 
@@ -527,7 +527,7 @@ if (m == 0 || n == 0) return;
     // Limit threads for small n to avoid redundant packing of A
     keel::i32 max_threads = static_cast<keel::i32>(keel::max<keel::usize>(1, n / 16));
 
-    keel::linalg_detail::parallel_for(n, p_thresh, [=](keel::usize jc_start, keel::usize jc_end) {
+    keel::linalg::linalg_detail::parallel_for(n, p_thresh, [=](keel::usize jc_start, keel::usize jc_end) {
         const keel::usize mc_padded = ((mc_block + mr - 1) / mr) * mr;
         constexpr keel::usize nc_padded = ((nc_block + nr - 1) / nr) * nr;
         thread_local static keel::Array<double> Ar_pack(mc_padded * kc_block + 64, 0.0, nullptr);
@@ -966,11 +966,11 @@ bool LuPanelComplexKernel(keel::c64 *A_cplx, keel::usize lda, keel::i32 *piv, ke
 
 // NOLINTNEXTLINE(google-readability-namespace-comments)
 }  // namespace HWY_NAMESPACE
-}  // namespace keel
+}  // namespace keel::linalg
 HWY_AFTER_NAMESPACE();
 
 #if HWY_ONCE
-namespace keel {
+namespace keel::linalg {
 
 HWY_EXPORT(GemmDoubleKernel);
 HWY_EXPORT(GemmComplexKernel);
@@ -1421,5 +1421,5 @@ void syrk(MatrixUplo uplo, MatrixTranspose trans,
     syrk_generic(uplo, trans, n, k, alpha, A, lda, beta, C, ldc);
 }
 
-} // namespace keel
+} // namespace keel::linalg
 #endif

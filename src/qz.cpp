@@ -6,7 +6,7 @@
 #include "keel/math.h"
 #include "linalg_internal.h"
 
-namespace keel {
+namespace keel::linalg {
 
 namespace {
 
@@ -449,4 +449,4 @@ void qz_eigenvectors(const c64* AA, const c64* BB, const c64* Z, usize n, c64* V
     }
 }
 
-} // namespace keel
+} // namespace keel::linalg

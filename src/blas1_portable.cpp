@@ -1,7 +1,7 @@
 #include "keel/linalg.h"
 #include "linalg_internal.h"
 
-namespace keel {
+namespace keel::linalg {
 
 void axpy(usize n, f64 alpha, const f64* x, f64* y) noexcept {
     if (alpha == 0.0 || n == 0) return;
@@ -13,4 +13,4 @@ void axpy(usize n, f64 alpha, const f64* x, f64* y) noexcept {
     });
 }
 
-} // namespace keel
+} // namespace keel::linalg

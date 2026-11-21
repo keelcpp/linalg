@@ -6,7 +6,7 @@
 #include <hwy/highway.h>
 
 HWY_BEFORE_NAMESPACE();
-namespace keel {
+namespace keel::linalg {
 namespace HWY_NAMESPACE {
 
 namespace hn = hwy::HWY_NAMESPACE;
@@ -28,11 +28,11 @@ void AxpyDoubleKernel(usize n, f64 alpha, const f64* x, f64* y) {
 }
 
 } // namespace HWY_NAMESPACE
-} // namespace keel
+} // namespace keel::linalg
 HWY_AFTER_NAMESPACE();
 
 #if HWY_ONCE
-namespace keel {
+namespace keel::linalg {
 
 HWY_EXPORT(AxpyDoubleKernel);
 
@@ -40,5 +40,5 @@ void axpy(usize n, f64 alpha, const f64* x, f64* y) noexcept {
     HWY_DYNAMIC_DISPATCH(AxpyDoubleKernel)(n, alpha, x, y);
 }
 
-} // namespace keel
+} // namespace keel::linalg
 #endif

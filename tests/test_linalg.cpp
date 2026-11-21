@@ -44,18 +44,18 @@ keel::f64 max_diff(const T* a, const T* b, keel::usize n) {
 }
 
 template <typename T>
-T op_elem(const T* M, keel::usize ld, keel::usize r, keel::usize c, keel::MatrixTranspose tr) {
-    if (tr == keel::MatrixTranspose::NoTrans) return M[r + c * ld];
+T op_elem(const T* M, keel::usize ld, keel::usize r, keel::usize c, keel::linalg::MatrixTranspose tr) {
+    if (tr == keel::linalg::MatrixTranspose::NoTrans) return M[r + c * ld];
     const T v = M[c + r * ld];
     if constexpr (keel::IsSame<T, keel::c64>) {
-        return (tr == keel::MatrixTranspose::ConjTrans) ? keel::conj(v) : v;
+        return (tr == keel::linalg::MatrixTranspose::ConjTrans) ? keel::conj(v) : v;
     } else {
         return v;
     }
 }
 
 template <typename T>
-void naive_gemm(keel::MatrixTranspose ta, keel::MatrixTranspose tb, keel::usize m, keel::usize n, keel::usize k,
+void naive_gemm(keel::linalg::MatrixTranspose ta, keel::linalg::MatrixTranspose tb, keel::usize m, keel::usize n, keel::usize k,
                 T alpha, const T* A, keel::usize lda, const T* B, keel::usize ldb, T beta, T* C, keel::usize ldc) {
     for (keel::usize j = 0; j < n; ++j) {
         for (keel::usize i = 0; i < m; ++i) {
@@ -71,34 +71,34 @@ void naive_gemm(keel::MatrixTranspose ta, keel::MatrixTranspose tb, keel::usize 
 void test_blas1() {
     keel::f64 x[5] = {1.0, 2.0, 3.0, 4.0, 5.0};
     keel::f64 y[5] = {10.0, 20.0, 30.0, 40.0, 50.0};
-    keel::axpy(5, 2.5, x, y);
+    keel::linalg::axpy(5, 2.5, x, y);
     for (keel::usize i = 0; i < 5; ++i) {
         CHECK(keel::abs(y[i] - (10.0 * static_cast<keel::f64>(i + 1) + 2.5 * x[i])) < 1e-12);
     }
 
-    CHECK(keel::abs(keel::dot(5, x, x) - 55.0) < 1e-12);
-    CHECK(keel::abs(keel::nrm2(5, x) - keel::sqrt(55.0)) < 1e-12);
+    CHECK(keel::abs(keel::linalg::dot(5, x, x) - 55.0) < 1e-12);
+    CHECK(keel::abs(keel::linalg::nrm2(5, x) - keel::sqrt(55.0)) < 1e-12);
 
     // Overflow-safe nrm2 test.
     keel::f64 huge[2] = {3e200, 4e200};
-    CHECK(keel::abs(keel::nrm2(2, huge) - 5e200) < 1e188);
+    CHECK(keel::abs(keel::linalg::nrm2(2, huge) - 5e200) < 1e188);
 
-    keel::scal(5, 3.0, x);
+    keel::linalg::scal(5, 3.0, x);
     CHECK(keel::abs(x[4] - 15.0) < 1e-12);
 
     keel::c64 cx[3] = {keel::c64(1.0, 2.0), keel::c64(3.0, -1.0), keel::c64(0.0, 4.0)};
     keel::c64 cy[3] = {keel::c64(2.0, -1.0), keel::c64(1.0, 1.0), keel::c64(-2.0, 3.0)};
-    const keel::c64 dc = keel::dotc(3, cx, cy);
+    const keel::c64 dc = keel::linalg::dotc(3, cx, cy);
     // conj(1+2i)*(2-i) = (1-2i)(2-i) = 0 - 5i
     // conj(3-i)*(1+i)  = (3+i)(1+i)  = 2 + 4i
     // conj(4i)*(-2+3i) = (-4i)(-2+3i) = 12 + 8i
     CHECK(keel::abs(dc - keel::c64(14.0, 7.0)) < 1e-12);
 
-    const keel::c64 du = keel::dotu(3, cx, cy);
+    const keel::c64 du = keel::linalg::dotu(3, cx, cy);
     CHECK(keel::abs(du - keel::c64(-4.0, -3.0)) < 1e-12);
-    CHECK(keel::abs(keel::nrm2(3, cx) - keel::sqrt(31.0)) < 1e-12);
+    CHECK(keel::abs(keel::linalg::nrm2(3, cx) - keel::sqrt(31.0)) < 1e-12);
 
-    keel::axpy(3, keel::c64(2.0, 1.0), cx, cy);
+    keel::linalg::axpy(3, keel::c64(2.0, 1.0), cx, cy);
     CHECK(keel::abs(cy[0] - (keel::c64(2.0, -1.0) + keel::c64(2.0, 1.0) * cx[0])) < 1e-12);
 }
 
@@ -114,7 +114,7 @@ void test_blas2() {
         for (keel::usize i = 0; i < m; ++i) A[i + j * m] = det_val(i, j, 2);
     }
 
-    keel::gemv(m, n, 2.0, A.data(), m, x.data(), 1, 0.5, y.data(), 1);
+    keel::linalg::gemv(m, n, 2.0, A.data(), m, x.data(), 1, 0.5, y.data(), 1);
     for (keel::usize i = 0; i < m; ++i) {
         keel::f64 s = 0.0;
         for (keel::usize j = 0; j < n; ++j) s += A[i + j * m] * x[j];
@@ -127,7 +127,7 @@ void test_blas2() {
     keel::Array<keel::f64> yt(n, 0.0);
     keel::Array<keel::f64> yt_ref(n, 0.0);
     for (keel::usize i = 0; i < m; ++i) xt[i] = det_val(i, 3, 4);
-    keel::gemv(keel::MatrixTranspose::Trans, m, n, -1.5, A.data(), m, xt.data(), 1, 0.0, yt.data(), 1);
+    keel::linalg::gemv(keel::linalg::MatrixTranspose::Trans, m, n, -1.5, A.data(), m, xt.data(), 1, 0.0, yt.data(), 1);
     for (keel::usize j = 0; j < n; ++j) {
         keel::f64 s = 0.0;
         for (keel::usize i = 0; i < m; ++i) s += A[i + j * m] * xt[i];
@@ -138,7 +138,7 @@ void test_blas2() {
     // Rank-1 ger.
     keel::Array<keel::f64> A_ref(m * n);
     for (keel::usize i = 0; i < m * n; ++i) A_ref[i] = A[i];
-    keel::ger(m, n, 0.75, xt.data(), 1, x.data(), 1, A.data(), m);
+    keel::linalg::ger(m, n, 0.75, xt.data(), 1, x.data(), 1, A.data(), m);
     for (keel::usize j = 0; j < n; ++j) {
         for (keel::usize i = 0; i < m; ++i) {
             A_ref[i + j * m] += 0.75 * xt[i] * x[j];
@@ -150,7 +150,7 @@ void test_blas2() {
 void test_gemm() {
     // Small (stack fast-path) & large (BLIS + multi-thread + odd tail panels).
     const keel::usize dims[2][3] = {{17, 19, 13}, {137, 129, 97}};
-    const keel::MatrixTranspose trs[2] = {keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::Trans};
+    const keel::linalg::MatrixTranspose trs[2] = {keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::Trans};
 
     for (keel::usize d = 0; d < 2; ++d) {
         const keel::usize m = dims[d][0];
@@ -160,10 +160,10 @@ void test_gemm() {
             for (keel::usize b_t = 0; b_t < 2; ++b_t) {
                 const auto ta = trs[a_t];
                 const auto tb = trs[b_t];
-                const keel::usize lda = (ta == keel::MatrixTranspose::NoTrans) ? m : k;
-                const keel::usize colsA = (ta == keel::MatrixTranspose::NoTrans) ? k : m;
-                const keel::usize ldb = (tb == keel::MatrixTranspose::NoTrans) ? k : n;
-                const keel::usize colsB = (tb == keel::MatrixTranspose::NoTrans) ? n : k;
+                const keel::usize lda = (ta == keel::linalg::MatrixTranspose::NoTrans) ? m : k;
+                const keel::usize colsA = (ta == keel::linalg::MatrixTranspose::NoTrans) ? k : m;
+                const keel::usize ldb = (tb == keel::linalg::MatrixTranspose::NoTrans) ? k : n;
+                const keel::usize colsB = (tb == keel::linalg::MatrixTranspose::NoTrans) ? n : k;
 
                 keel::Array<keel::f64> A(lda * colsA);
                 keel::Array<keel::f64> B(ldb * colsB);
@@ -173,7 +173,7 @@ void test_gemm() {
                 for (keel::usize i = 0; i < B.size(); ++i) B[i] = det_val(i, 2, 20 + d);
                 for (keel::usize i = 0; i < C.size(); ++i) C[i] = C_ref[i] = det_val(i, 3, 30 + d);
 
-                keel::gemm(ta, tb, m, n, k, 1.3, A.data(), lda, B.data(), ldb, -0.7, C.data(), m);
+                keel::linalg::gemm(ta, tb, m, n, k, 1.3, A.data(), lda, B.data(), ldb, -0.7, C.data(), m);
                 naive_gemm(ta, tb, m, n, k, 1.3, A.data(), lda, B.data(), ldb, -0.7, C_ref.data(), m);
                 CHECK(max_diff(C.data(), C_ref.data(), m * n) < 1e-10);
             }
@@ -193,14 +193,14 @@ void test_gemm() {
 
         const keel::c64 alpha(1.2, -0.4);
         const keel::c64 beta(0.3, 0.5);
-        keel::gemm(keel::MatrixTranspose::ConjTrans, keel::MatrixTranspose::NoTrans, m, n, k, alpha, A.data(), k,
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::ConjTrans, keel::linalg::MatrixTranspose::NoTrans, m, n, k, alpha, A.data(), k,
                    B.data(), k, beta, C.data(), m);
-        naive_gemm(keel::MatrixTranspose::ConjTrans, keel::MatrixTranspose::NoTrans, m, n, k, alpha, A.data(), k,
+        naive_gemm(keel::linalg::MatrixTranspose::ConjTrans, keel::linalg::MatrixTranspose::NoTrans, m, n, k, alpha, A.data(), k,
                    B.data(), k, beta, C_ref.data(), m);
         CHECK(max_diff(C.data(), C_ref.data(), m * n) < 1e-10);
     }
 
-    CHECK(keel::linalg_last_gemm_threads_used() >= 1);
+    CHECK(keel::linalg::linalg_last_gemm_threads_used() >= 1);
 }
 
 void test_trsm_and_syrk() {
@@ -217,11 +217,11 @@ void test_trsm_and_syrk() {
     }
     for (keel::usize i = 0; i < m * n; ++i) B[i] = X[i] = det_val(i, 4, 56);
 
-    keel::trsm(keel::MatrixSide::Left, keel::MatrixUplo::Upper, keel::MatrixTranspose::NoTrans,
-               keel::MatrixDiag::NonUnit, m, n, 1.0, U.data(), m, X.data(), m);
+    keel::linalg::trsm(keel::linalg::MatrixSide::Left, keel::linalg::MatrixUplo::Upper, keel::linalg::MatrixTranspose::NoTrans,
+               keel::linalg::MatrixDiag::NonUnit, m, n, 1.0, U.data(), m, X.data(), m);
 
     keel::Array<keel::f64> UX(m * n, 0.0);
-    keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m, n, m, 1.0, U.data(), m, X.data(), m,
+    keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m, n, m, 1.0, U.data(), m, X.data(), m,
                0.0, UX.data(), m);
     CHECK(max_diff(UX.data(), B.data(), m * n) < 1e-11);
 
@@ -232,8 +232,8 @@ void test_trsm_and_syrk() {
     for (keel::usize i = 0; i < A.size(); ++i) A[i] = det_val(i, 5, 60);
     keel::Array<keel::f64> C(sn * sn, 0.0);
     keel::Array<keel::f64> C_ref(sn * sn, 0.0);
-    keel::syrk(keel::MatrixUplo::Upper, keel::MatrixTranspose::NoTrans, sn, sk, 1.0, A.data(), sn, 0.0, C.data(), sn);
-    naive_gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::Trans, sn, sn, sk, 1.0, A.data(), sn, A.data(),
+    keel::linalg::syrk(keel::linalg::MatrixUplo::Upper, keel::linalg::MatrixTranspose::NoTrans, sn, sk, 1.0, A.data(), sn, 0.0, C.data(), sn);
+    naive_gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::Trans, sn, sn, sk, 1.0, A.data(), sn, A.data(),
                sn, 0.0, C_ref.data(), sn);
     for (keel::usize j = 0; j < sn; ++j) {
         for (keel::usize i = 0; i <= j; ++i) {
@@ -257,10 +257,10 @@ void test_solve_lu_inv() {
             }
         }
         for (keel::usize i = 0; i < n * nrhs; ++i) X_true[i] = det_val(i, 7, 71);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, nrhs, n, 1.0, A.data(), n,
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, nrhs, n, 1.0, A.data(), n,
                    X_true.data(), n, 0.0, B.data(), n);
 
-        CHECK(keel::la_solve(A.data(), n, n, B.data(), nrhs, X.data()));
+        CHECK(keel::linalg::la_solve(A.data(), n, n, B.data(), nrhs, X.data()));
         CHECK(max_diff(X.data(), X_true.data(), n * nrhs) < 1e-11);
     }
 
@@ -275,8 +275,8 @@ void test_solve_lu_inv() {
                 A[i + j * n] = det_cval(i, j, 80) + ((i == j) ? keel::c64(8.0, 1.0) : keel::c64(0.0, 0.0));
             }
         }
-        CHECK(keel::matrix_inv(A.data(), n, A_inv.data()));
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        CHECK(keel::linalg::matrix_inv(A.data(), n, A_inv.data()));
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    A.data(), n, A_inv.data(), n, keel::c64(0.0, 0.0), prod.data(), n);
         for (keel::usize j = 0; j < n; ++j) {
             for (keel::usize i = 0; i < n; ++i) {
@@ -298,8 +298,8 @@ void test_solve_lu_inv() {
             x_true[j] = static_cast<keel::f64>(j + 1);
             for (keel::usize i = 0; i < m; ++i) A[i + j * m] = det_val(i, j, 90);
         }
-        keel::gemv(m, n, 1.0, A.data(), m, x_true.data(), 1, 0.0, b.data(), 1);
-        CHECK(keel::la_solve(A.data(), m, n, b.data(), 1, x.data()));
+        keel::linalg::gemv(m, n, 1.0, A.data(), m, x_true.data(), 1, 0.0, b.data(), 1);
+        CHECK(keel::linalg::la_solve(A.data(), m, n, b.data(), 1, x.data()));
         CHECK(max_diff(x.data(), x_true.data(), n) < 1e-11);
     }
 
@@ -307,7 +307,7 @@ void test_solve_lu_inv() {
     {
         keel::f64 S[4] = {1.0, 2.0, 2.0, 4.0};
         keel::f64 invS[4] = {};
-        CHECK(!keel::matrix_inv(S, 2, invS));
+        CHECK(!keel::linalg::matrix_inv(S, 2, invS));
     }
 }
 
@@ -324,10 +324,10 @@ void test_cholesky() {
                 M[i + j * n] = det_val(i, j, 100) + ((i == j) ? 5.0 : 0.0);
             }
         }
-        keel::gemm(keel::MatrixTranspose::Trans, keel::MatrixTranspose::NoTrans, n, n, n, 1.0, M.data(), n, M.data(), n,
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::Trans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, 1.0, M.data(), n, M.data(), n,
                    0.0, A.data(), n);
-        CHECK(keel::cholesky_upper(A.data(), R.data(), n) == 0);
-        keel::gemm(keel::MatrixTranspose::Trans, keel::MatrixTranspose::NoTrans, n, n, n, 1.0, R.data(), n, R.data(), n,
+        CHECK(keel::linalg::cholesky_upper(A.data(), R.data(), n) == 0);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::Trans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, 1.0, R.data(), n, R.data(), n,
                    0.0, RtR.data(), n);
         CHECK(max_diff(RtR.data(), A.data(), n * n) < 1e-10);
     }
@@ -344,10 +344,10 @@ void test_cholesky() {
                 M[i + j * n] = det_cval(i, j, 110) + ((i == j) ? keel::c64(4.0, 0.0) : keel::c64(0.0, 0.0));
             }
         }
-        keel::gemm(keel::MatrixTranspose::ConjTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::ConjTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    M.data(), n, M.data(), n, keel::c64(0.0, 0.0), A.data(), n);
-        CHECK(keel::cholesky_upper(A.data(), R.data(), n) == 0);
-        keel::gemm(keel::MatrixTranspose::ConjTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        CHECK(keel::linalg::cholesky_upper(A.data(), R.data(), n) == 0);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::ConjTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    R.data(), n, R.data(), n, keel::c64(0.0, 0.0), RhR.data(), n);
         CHECK(max_diff(RhR.data(), A.data(), n * n) < 1e-10);
     }
@@ -356,7 +356,7 @@ void test_cholesky() {
     {
         keel::f64 bad[4] = {1.0, 2.0, 2.0, 1.0};
         keel::f64 R[4] = {};
-        CHECK(keel::cholesky_upper(bad, R, 2) == 2);
+        CHECK(keel::linalg::cholesky_upper(bad, R, 2) == 2);
     }
 }
 
@@ -369,11 +369,11 @@ void test_qr() {
 
     keel::Array<keel::f64> Q(m * m);
     keel::Array<keel::f64> R(m * n);
-    keel::qr_householder(A.data(), m, n, Q.data(), R.data());
+    keel::linalg::qr_householder(A.data(), m, n, Q.data(), R.data());
 
     // Q^T * Q == I
     keel::Array<keel::f64> QtQ(m * m, 0.0);
-    keel::gemm(keel::MatrixTranspose::Trans, keel::MatrixTranspose::NoTrans, m, m, m, 1.0, Q.data(), m, Q.data(), m,
+    keel::linalg::gemm(keel::linalg::MatrixTranspose::Trans, keel::linalg::MatrixTranspose::NoTrans, m, m, m, 1.0, Q.data(), m, Q.data(), m,
                0.0, QtQ.data(), m);
     for (keel::usize j = 0; j < m; ++j) {
         for (keel::usize i = 0; i < m; ++i) {
@@ -383,7 +383,7 @@ void test_qr() {
 
     // Q * R == A
     keel::Array<keel::f64> QR(m * n, 0.0);
-    keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m, n, m, 1.0, Q.data(), m, R.data(), m,
+    keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m, n, m, 1.0, Q.data(), m, R.data(), m,
                0.0, QR.data(), m);
     CHECK(max_diff(QR.data(), A.data(), m * n) < 1e-12);
 
@@ -393,10 +393,10 @@ void test_qr() {
     keel::Array<keel::c64> Qc(m * m);
     keel::Array<keel::c64> Rc(m * n);
     keel::Array<keel::usize> perm(n);
-    keel::qr_pivoted(Ac.data(), m, n, Qc.data(), Rc.data(), perm.data());
+    keel::linalg::qr_pivoted(Ac.data(), m, n, Qc.data(), Rc.data(), perm.data());
 
     keel::Array<keel::c64> QRc(m * n, keel::c64(0.0, 0.0));
-    keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m, n, m, keel::c64(1.0, 0.0), Qc.data(),
+    keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m, n, m, keel::c64(1.0, 0.0), Qc.data(),
                m, Rc.data(), m, keel::c64(0.0, 0.0), QRc.data(), m);
     for (keel::usize j = 0; j < n; ++j) {
         for (keel::usize i = 0; i < m; ++i) {
@@ -416,7 +416,7 @@ void test_svd() {
         keel::Array<keel::f64> S(n);
         for (keel::usize i = 0; i < m * n; ++i) A_orig[i] = U[i] = det_val(i, 10, 140);
 
-        keel::svd_jacobi_inplace(U.data(), m, n, V.data(), S.data());
+        keel::linalg::svd_jacobi_inplace(U.data(), m, n, V.data(), S.data());
         for (keel::usize i = 0; i + 1 < n; ++i) CHECK(S[i] >= S[i + 1]);
 
         // Reconstruct U * diag(S) * V^T == A_orig.
@@ -425,7 +425,7 @@ void test_svd() {
             for (keel::usize i = 0; i < m; ++i) US[i + j * m] = U[i + j * m] * S[j];
         }
         keel::Array<keel::f64> rec(m * n, 0.0);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::Trans, m, n, n, 1.0, US.data(), m, V.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::Trans, m, n, n, 1.0, US.data(), m, V.data(),
                    n, 0.0, rec.data(), m);
         CHECK(max_diff(rec.data(), A_orig.data(), m * n) < 1e-11);
     }
@@ -440,7 +440,7 @@ void test_svd() {
         keel::Array<keel::f64> S(n);
         for (keel::usize i = 0; i < m * n; ++i) A_orig[i] = U[i] = det_cval(i, 11, 150);
 
-        keel::svd_jacobi_inplace(U.data(), m, n, V.data(), S.data());
+        keel::linalg::svd_jacobi_inplace(U.data(), m, n, V.data(), S.data());
         for (keel::usize i = 0; i + 1 < n; ++i) CHECK(S[i] >= S[i + 1]);
 
         keel::Array<keel::c64> US(m * n);
@@ -448,7 +448,7 @@ void test_svd() {
             for (keel::usize i = 0; i < m; ++i) US[i + j * m] = U[i + j * m] * S[j];
         }
         keel::Array<keel::c64> rec(m * n, keel::c64(0.0, 0.0));
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::ConjTrans, m, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::ConjTrans, m, n, n, keel::c64(1.0, 0.0),
                    US.data(), m, V.data(), n, keel::c64(0.0, 0.0), rec.data(), m);
         CHECK(max_diff(rec.data(), A_orig.data(), m * n) < 1e-11);
     }
@@ -463,21 +463,21 @@ void test_svd() {
         keel::Array<keel::c64> V(n * n);
         for (keel::usize i = 0; i < m * n; ++i) A[i] = det_cval(i, 17, 210);
 
-        keel::svd_full(A.data(), m, n, U.data(), S.data(), V.data());
+        keel::linalg::svd_full(A.data(), m, n, U.data(), S.data(), V.data());
         for (keel::usize i = 0; i + 1 < m; ++i) CHECK(S[i] >= S[i + 1]);
 
         keel::Array<keel::c64> Smat(m * n, keel::c64(0.0, 0.0));
         for (keel::usize i = 0; i < m; ++i) Smat[i + i * m] = keel::c64(S[i], 0.0);
         keel::Array<keel::c64> US(m * n, keel::c64(0.0, 0.0));
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m, n, m, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m, n, m, keel::c64(1.0, 0.0),
                    U.data(), m, Smat.data(), m, keel::c64(0.0, 0.0), US.data(), m);
         keel::Array<keel::c64> rec(m * n, keel::c64(0.0, 0.0));
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::ConjTrans, m, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::ConjTrans, m, n, n, keel::c64(1.0, 0.0),
                    US.data(), m, V.data(), n, keel::c64(0.0, 0.0), rec.data(), m);
         CHECK(max_diff(rec.data(), A.data(), m * n) < 1e-11);
 
         keel::Array<keel::c64> VtV(n * n, keel::c64(0.0, 0.0));
-        keel::gemm(keel::MatrixTranspose::ConjTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::ConjTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    V.data(), n, V.data(), n, keel::c64(0.0, 0.0), VtV.data(), n);
         keel::Array<keel::c64> eye(n * n, keel::c64(0.0, 0.0));
         for (keel::usize i = 0; i < n; ++i) eye[i + i * n] = keel::c64(1.0, 0.0);
@@ -495,7 +495,7 @@ void test_factor_updates_ldl_balance() {
         keel::Array<keel::f64> LU(m * n);
         for (keel::usize i = 0; i < m * n; ++i) LU[i] = A[i];
         keel::Array<keel::i32> piv(m);
-        CHECK(keel::lu_factor_general(LU.data(), m, n, piv.data()));
+        CHECK(keel::linalg::lu_factor_general(LU.data(), m, n, piv.data()));
 
         keel::Array<keel::f64> L(m * m, 0.0);
         keel::Array<keel::f64> U(m * n, 0.0);
@@ -508,7 +508,7 @@ void test_factor_updates_ldl_balance() {
             for (keel::usize i = 0; i < lim; ++i) U[i + j * m] = LU[i + j * m];
         }
         keel::Array<keel::f64> prod(m * n, 0.0);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m, n, m, 1.0, L.data(), m, U.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m, n, m, 1.0, L.data(), m, U.data(),
                    m, 0.0, prod.data(), m);
         keel::Array<keel::f64> PA(m * n);
         for (keel::usize i = 0; i < m * n; ++i) PA[i] = A[i];
@@ -529,7 +529,7 @@ void test_factor_updates_ldl_balance() {
         for (keel::usize i = 0; i < m * n; ++i) A[i] = det_val(i, 13, 320);
         keel::Array<keel::f64> Q(m * m);
         keel::Array<keel::f64> R(m * n);
-        keel::qr_householder(A.data(), m, n, Q.data(), R.data());
+        keel::linalg::qr_householder(A.data(), m, n, Q.data(), R.data());
 
         // Rank-1 update A + u*v^T
         keel::Array<keel::f64> u(m);
@@ -544,31 +544,31 @@ void test_factor_updates_ldl_balance() {
         keel::Array<keel::f64> Ru(m * n);
         for (keel::usize i = 0; i < m * m; ++i) Qu[i] = Q[i];
         for (keel::usize i = 0; i < m * n; ++i) Ru[i] = R[i];
-        keel::qr_update(Qu.data(), Ru.data(), m, n, u.data(), v.data());
+        keel::linalg::qr_update(Qu.data(), Ru.data(), m, n, u.data(), v.data());
         keel::Array<keel::f64> rec(m * n, 0.0);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m, n, m, 1.0, Qu.data(), m,
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m, n, m, 1.0, Qu.data(), m,
                    Ru.data(), m, 0.0, rec.data(), m);
         CHECK(max_diff(rec.data(), A_upd.data(), m * n) < 1e-11);
 
         // Insert col then delete col -> recovers A
         keel::Array<keel::f64> Qi(m * m);
         keel::Array<keel::f64> Ri(m * (n + 1));
-        keel::qr_insert_col(Q.data(), R.data(), m, n, 2, u.data(), Qi.data(), Ri.data());
+        keel::linalg::qr_insert_col(Q.data(), R.data(), m, n, 2, u.data(), Qi.data(), Ri.data());
         keel::Array<keel::f64> Qd(m * m);
         keel::Array<keel::f64> Rd(m * n);
-        keel::qr_delete_col(Qi.data(), Ri.data(), m, n + 1, 2, Qd.data(), Rd.data());
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m, n, m, 1.0, Qd.data(), m,
+        keel::linalg::qr_delete_col(Qi.data(), Ri.data(), m, n + 1, 2, Qd.data(), Rd.data());
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m, n, m, 1.0, Qd.data(), m,
                    Rd.data(), m, 0.0, rec.data(), m);
         CHECK(max_diff(rec.data(), A.data(), m * n) < 1e-11);
 
         // Insert row then delete row -> recovers A
         keel::Array<keel::f64> Qir((m + 1) * (m + 1));
         keel::Array<keel::f64> Rir((m + 1) * n);
-        keel::qr_insert_row(Q.data(), R.data(), m, n, 3, v.data(), Qir.data(), Rir.data());
+        keel::linalg::qr_insert_row(Q.data(), R.data(), m, n, 3, v.data(), Qir.data(), Rir.data());
         keel::Array<keel::f64> Qdr(m * m);
         keel::Array<keel::f64> Rdr(m * n);
-        keel::qr_delete_row(Qir.data(), Rir.data(), m + 1, n, 3, Qdr.data(), Rdr.data());
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m, n, m, 1.0, Qdr.data(), m,
+        keel::linalg::qr_delete_row(Qir.data(), Rir.data(), m + 1, n, 3, Qdr.data(), Rdr.data());
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m, n, m, 1.0, Qdr.data(), m,
                    Rdr.data(), m, 0.0, rec.data(), m);
         CHECK(max_diff(rec.data(), A.data(), m * n) < 1e-11);
     }
@@ -579,18 +579,18 @@ void test_factor_updates_ldl_balance() {
         keel::Array<keel::f64> M(n * n);
         for (keel::usize i = 0; i < n * n; ++i) M[i] = det_val(i, 5, 360);
         keel::Array<keel::f64> A(n * n, 0.0);
-        keel::gemm(keel::MatrixTranspose::Trans, keel::MatrixTranspose::NoTrans, n, n, n, 1.0, M.data(), n, M.data(), n,
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::Trans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, 1.0, M.data(), n, M.data(), n,
                    0.0, A.data(), n);
         for (keel::usize i = 0; i < n; ++i) A[i + i * n] += 4.0;
         keel::Array<keel::f64> R(n * n);
-        CHECK(keel::cholesky_upper(A.data(), R.data(), n) == 0);
+        CHECK(keel::linalg::cholesky_upper(A.data(), R.data(), n) == 0);
 
         keel::Array<keel::f64> x(n);
         for (keel::usize i = 0; i < n; ++i) x[i] = 0.5 * det_val(i, 7, 370);
-        CHECK(keel::cholesky_update(R.data(), n, x.data(), false));
+        CHECK(keel::linalg::cholesky_update(R.data(), n, x.data(), false));
 
         keel::Array<keel::f64> RtR(n * n, 0.0);
-        keel::gemm(keel::MatrixTranspose::Trans, keel::MatrixTranspose::NoTrans, n, n, n, 1.0, R.data(), n, R.data(), n,
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::Trans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, 1.0, R.data(), n, R.data(), n,
                    0.0, RtR.data(), n);
         keel::Array<keel::f64> expected(n * n);
         for (keel::usize j = 0; j < n; ++j) {
@@ -599,14 +599,14 @@ void test_factor_updates_ldl_balance() {
         CHECK(max_diff(RtR.data(), expected.data(), n * n) < 1e-11);
 
         // Downdate back to A
-        CHECK(keel::cholesky_update(R.data(), n, x.data(), true));
-        keel::gemm(keel::MatrixTranspose::Trans, keel::MatrixTranspose::NoTrans, n, n, n, 1.0, R.data(), n, R.data(), n,
+        CHECK(keel::linalg::cholesky_update(R.data(), n, x.data(), true));
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::Trans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, 1.0, R.data(), n, R.data(), n,
                    0.0, RtR.data(), n);
         CHECK(max_diff(RtR.data(), A.data(), n * n) < 1e-11);
 
         // Excessively large downdate must fail cleanly
         keel::Array<keel::f64> big(n, 100.0);
-        CHECK(!keel::cholesky_update(R.data(), n, big.data(), true));
+        CHECK(!keel::linalg::cholesky_update(R.data(), n, big.data(), true));
     }
 
     // 4. ldl_factor (real symmetric indefinite & complex Hermitian)
@@ -623,13 +623,13 @@ void test_factor_updates_ldl_balance() {
         }
         keel::Array<keel::f64> L(n * n);
         keel::Array<keel::f64> D(n);
-        CHECK(keel::ldl_factor(A.data(), n, L.data(), D.data()) == 0);
+        CHECK(keel::linalg::ldl_factor(A.data(), n, L.data(), D.data()) == 0);
         keel::Array<keel::f64> LD(n * n);
         for (keel::usize j = 0; j < n; ++j) {
             for (keel::usize i = 0; i < n; ++i) LD[i + j * n] = L[i + j * n] * D[j];
         }
         keel::Array<keel::f64> rec(n * n, 0.0);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::Trans, n, n, n, 1.0, LD.data(), n, L.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::Trans, n, n, n, 1.0, LD.data(), n, L.data(),
                    n, 0.0, rec.data(), n);
         CHECK(max_diff(rec.data(), A.data(), n * n) < 1e-11);
 
@@ -643,13 +643,13 @@ void test_factor_updates_ldl_balance() {
             H[j + j * n] = keel::c64((j % 2 == 0) ? 6.0 : -5.0, 0.0);
         }
         keel::Array<keel::c64> Lc(n * n);
-        CHECK(keel::ldl_factor(H.data(), n, Lc.data(), D.data()) == 0);
+        CHECK(keel::linalg::ldl_factor(H.data(), n, Lc.data(), D.data()) == 0);
         keel::Array<keel::c64> LDc(n * n);
         for (keel::usize j = 0; j < n; ++j) {
             for (keel::usize i = 0; i < n; ++i) LDc[i + j * n] = Lc[i + j * n] * D[j];
         }
         keel::Array<keel::c64> recc(n * n, keel::c64(0.0, 0.0));
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::ConjTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::ConjTrans, n, n, n, keel::c64(1.0, 0.0),
                    LDc.data(), n, Lc.data(), n, keel::c64(0.0, 0.0), recc.data(), n);
         CHECK(max_diff(recc.data(), H.data(), n * n) < 1e-11);
     }
@@ -661,7 +661,7 @@ void test_factor_updates_ldl_balance() {
         keel::f64 B[9];
         for (keel::usize i = 0; i < 9; ++i) B[i] = A[i];
         keel::f64 d[3];
-        keel::balance_matrix(B, n, false, d);
+        keel::linalg::balance_matrix(B, n, false, d);
         for (keel::usize j = 0; j < n; ++j) {
             for (keel::usize i = 0; i < n; ++i) {
                 const keel::f64 reconstructed = d[i] * B[i + j * n] / d[j];
@@ -684,7 +684,7 @@ void test_eig_schur_qz() {
         }
         keel::Array<keel::f64> V(n * n);
         keel::Array<keel::f64> D(n);
-        keel::eig_sym(A.data(), n, V.data(), D.data());
+        keel::linalg::eig_sym(A.data(), n, V.data(), D.data());
         for (keel::usize i = 0; i + 1 < n; ++i) CHECK(D[i] <= D[i + 1] + 1e-12);
 
         keel::Array<keel::f64> VD(n * n);
@@ -692,7 +692,7 @@ void test_eig_schur_qz() {
             for (keel::usize i = 0; i < n; ++i) VD[i + j * n] = V[i + j * n] * D[j];
         }
         keel::Array<keel::f64> rec(n * n, 0.0);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::Trans, n, n, n, 1.0, VD.data(), n, V.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::Trans, n, n, n, 1.0, VD.data(), n, V.data(),
                    n, 0.0, rec.data(), n);
         CHECK(max_diff(rec.data(), A.data(), n * n) < 1e-10);
     }
@@ -705,21 +705,21 @@ void test_eig_schur_qz() {
             M1[i] = det_val(i, 5, 420);
             M2[i] = det_val(i, 11, 430);
         }
-        keel::gemm(keel::MatrixTranspose::Trans, keel::MatrixTranspose::NoTrans, n, n, n, 1.0, M1.data(), n, M1.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::Trans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, 1.0, M1.data(), n, M1.data(),
                    n, 0.0, A.data(), n);
-        keel::gemm(keel::MatrixTranspose::Trans, keel::MatrixTranspose::NoTrans, n, n, n, 1.0, M2.data(), n, M2.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::Trans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, 1.0, M2.data(), n, M2.data(),
                    n, 0.0, B.data(), n);
         for (keel::usize i = 0; i < n; ++i) {
             A[i + i * n] += 5.0;
             B[i + i * n] += 4.0;
         }
         keel::Array<keel::f64> V(n * n), D(n);
-        CHECK(keel::eig_sym_generalized(A.data(), B.data(), n, V.data(), D.data()));
+        CHECK(keel::linalg::eig_sym_generalized(A.data(), B.data(), n, V.data(), D.data()));
         // Check A*V = B*V*D
         keel::Array<keel::f64> AV(n * n, 0.0), BV(n * n, 0.0), BVD(n * n, 0.0);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, 1.0, A.data(), n, V.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, 1.0, A.data(), n, V.data(),
                    n, 0.0, AV.data(), n);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, 1.0, B.data(), n, V.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, 1.0, B.data(), n, V.data(),
                    n, 0.0, BV.data(), n);
         for (keel::usize j = 0; j < n; ++j) {
             for (keel::usize i = 0; i < n; ++i) BVD[i + j * n] = BV[i + j * n] * D[j];
@@ -728,7 +728,7 @@ void test_eig_schur_qz() {
 
         const keel::usize k = 3;
         keel::Array<keel::f64> Vk(n * k), Dk(k);
-        CHECK(keel::eigs_sym_generalized_smallest_abs(A.data(), B.data(), n, k, Vk.data(), Dk.data()));
+        CHECK(keel::linalg::eigs_sym_generalized_smallest_abs(A.data(), B.data(), n, k, Vk.data(), Dk.data()));
         for (keel::usize i = 0; i < k; ++i) CHECK(keel::abs(Dk[i] - D[i]) < 1e-9);
     }
 
@@ -738,34 +738,34 @@ void test_eig_schur_qz() {
         keel::Array<keel::f64> A(n * n);
         for (keel::usize i = 0; i < n * n; ++i) A[i] = det_val(i, 19, 440);
         keel::Array<keel::f64> U(n * n), T(n * n);
-        keel::schur_real(A.data(), n, U.data(), T.data());
+        keel::linalg::schur_real(A.data(), n, U.data(), T.data());
 
         keel::Array<keel::f64> UT(n * n, 0.0), rec(n * n, 0.0);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, 1.0, U.data(), n, T.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, 1.0, U.data(), n, T.data(),
                    n, 0.0, UT.data(), n);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::Trans, n, n, n, 1.0, UT.data(), n, U.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::Trans, n, n, n, 1.0, UT.data(), n, U.data(),
                    n, 0.0, rec.data(), n);
         CHECK(max_diff(rec.data(), A.data(), n * n) < 1e-11);
 
         // rsf2csf: UC * TC * UC^H == A
         keel::Array<keel::c64> UC(n * n), TC(n * n);
-        keel::rsf2csf(U.data(), T.data(), n, UC.data(), TC.data());
+        keel::linalg::rsf2csf(U.data(), T.data(), n, UC.data(), TC.data());
         keel::Array<keel::c64> Ac(n * n);
         for (keel::usize i = 0; i < n * n; ++i) Ac[i] = keel::c64(A[i], 0.0);
         keel::Array<keel::c64> UCTC(n * n, keel::c64(0.0, 0.0)), recc(n * n, keel::c64(0.0, 0.0));
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    UC.data(), n, TC.data(), n, keel::c64(0.0, 0.0), UCTC.data(), n);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::ConjTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::ConjTrans, n, n, n, keel::c64(1.0, 0.0),
                    UCTC.data(), n, UC.data(), n, keel::c64(0.0, 0.0), recc.data(), n);
         CHECK(max_diff(recc.data(), Ac.data(), n * n) < 1e-11);
 
         // schur_complex + schur_eigenvectors + ordschur_complex
         keel::Array<keel::c64> Us(n * n), Ts(n * n);
-        CHECK(keel::schur_complex(Ac.data(), n, Us.data(), Ts.data()));
+        CHECK(keel::linalg::schur_complex(Ac.data(), n, Us.data(), Ts.data()));
         keel::Array<keel::c64> Vc(n * n), evals(n);
-        keel::schur_eigenvectors(Us.data(), Ts.data(), n, Vc.data(), evals.data());
+        keel::linalg::schur_eigenvectors(Us.data(), Ts.data(), n, Vc.data(), evals.data());
         keel::Array<keel::c64> AV(n * n, keel::c64(0.0, 0.0)), VD(n * n, keel::c64(0.0, 0.0));
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    Ac.data(), n, Vc.data(), n, keel::c64(0.0, 0.0), AV.data(), n);
         for (keel::usize j = 0; j < n; ++j) {
             for (keel::usize i = 0; i < n; ++i) VD[i + j * n] = Vc[i + j * n] * evals[j];
@@ -780,14 +780,14 @@ void test_eig_schur_qz() {
                 ++n_sel;
             }
         }
-        keel::ordschur_complex(Us.data(), Ts.data(), n, sel.data());
+        keel::linalg::ordschur_complex(Us.data(), Ts.data(), n, sel.data());
         for (keel::usize i = 0; i < n_sel; ++i) CHECK(Ts[i + i * n].real() < 0.0);
         for (keel::usize j = 0; j < n; ++j) {
             for (keel::usize i = j + 1; i < n; ++i) CHECK(keel::abs(Ts[i + j * n]) < 1e-11);
         }
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    Us.data(), n, Ts.data(), n, keel::c64(0.0, 0.0), UCTC.data(), n);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::ConjTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::ConjTrans, n, n, n, keel::c64(1.0, 0.0),
                    UCTC.data(), n, Us.data(), n, keel::c64(0.0, 0.0), recc.data(), n);
         CHECK(max_diff(recc.data(), Ac.data(), n * n) < 1e-10);
     }
@@ -803,22 +803,22 @@ void test_eig_schur_qz() {
         for (keel::usize i = 0; i < n; ++i) B[i + i * n] += keel::c64(3.0, 0.0);
 
         keel::Array<keel::c64> AA(n * n), BB(n * n), Q(n * n), Z(n * n);
-        CHECK(keel::qz_factor(A.data(), B.data(), n, AA.data(), BB.data(), Q.data(), Z.data()));
+        CHECK(keel::linalg::qz_factor(A.data(), B.data(), n, AA.data(), BB.data(), Q.data(), Z.data()));
 
         // Verify Q * A * Z == AA and Q * B * Z == BB
         keel::Array<keel::c64> QA(n * n, keel::c64(0.0, 0.0)), QAZ(n * n, keel::c64(0.0, 0.0));
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    Q.data(), n, A.data(), n, keel::c64(0.0, 0.0), QA.data(), n);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    QA.data(), n, Z.data(), n, keel::c64(0.0, 0.0), QAZ.data(), n);
         CHECK(max_diff(QAZ.data(), AA.data(), n * n) < 1e-10);
 
         keel::Array<keel::c64> V(n * n), evals(n);
-        keel::qz_eigenvectors(AA.data(), BB.data(), Z.data(), n, V.data(), evals.data());
+        keel::linalg::qz_eigenvectors(AA.data(), BB.data(), Z.data(), n, V.data(), evals.data());
         keel::Array<keel::c64> AV(n * n, keel::c64(0.0, 0.0)), BV(n * n, keel::c64(0.0, 0.0)), BVD(n * n);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    A.data(), n, V.data(), n, keel::c64(0.0, 0.0), AV.data(), n);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    B.data(), n, V.data(), n, keel::c64(0.0, 0.0), BV.data(), n);
         for (keel::usize j = 0; j < n; ++j) {
             for (keel::usize i = 0; i < n; ++i) BVD[i + j * n] = BV[i + j * n] * evals[j];
@@ -828,7 +828,7 @@ void test_eig_schur_qz() {
         const keel::c64 target_eig = AA[(n - 1) + (n - 1) * n] / BB[(n - 1) + (n - 1) * n];
         keel::Array<keel::u8> sel(n, keel::u8{0});
         sel[n - 1] = keel::u8{1};
-        keel::ordqz_complex(AA.data(), BB.data(), Q.data(), Z.data(), n, sel.data());
+        keel::linalg::ordqz_complex(AA.data(), BB.data(), Q.data(), Z.data(), n, sel.data());
         CHECK(keel::abs(AA[0] / BB[0] - target_eig) < 1e-10);
         for (keel::usize j = 0; j < n; ++j) {
             for (keel::usize i = j + 1; i < n; ++i) {
@@ -836,9 +836,9 @@ void test_eig_schur_qz() {
                 CHECK(keel::abs(BB[i + j * n]) < 1e-10);
             }
         }
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    Q.data(), n, A.data(), n, keel::c64(0.0, 0.0), QA.data(), n);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    QA.data(), n, Z.data(), n, keel::c64(0.0, 0.0), QAZ.data(), n);
         CHECK(max_diff(QAZ.data(), AA.data(), n * n) < 1e-10);
     }
@@ -853,29 +853,29 @@ void test_matrix_functions_and_solvers() {
         for (keel::usize i = 0; i < n; ++i) A[i + i * n] += 2.0;
 
         keel::Array<keel::f64> E(n * n);
-        CHECK(keel::expm(A.data(), n, E.data()));
+        CHECK(keel::linalg::expm(A.data(), n, E.data()));
 
         keel::Array<keel::c64> Ac(n * n), Ec(n * n), Lc(n * n), Sc(n * n);
         for (keel::usize i = 0; i < n * n; ++i) {
             Ac[i] = keel::c64(A[i], 0.0);
             Ec[i] = keel::c64(E[i], 0.0);
         }
-        CHECK(keel::logm(Ec.data(), n, Lc.data()));
+        CHECK(keel::linalg::logm(Ec.data(), n, Lc.data()));
         CHECK(max_diff(Lc.data(), Ac.data(), n * n) < 1e-10);
 
-        CHECK(keel::sqrtm(Ac.data(), n, Sc.data()));
+        CHECK(keel::linalg::sqrtm(Ac.data(), n, Sc.data()));
         keel::Array<keel::c64> S2(n * n, keel::c64(0.0, 0.0));
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    Sc.data(), n, Sc.data(), n, keel::c64(0.0, 0.0), S2.data(), n);
         CHECK(max_diff(S2.data(), Ac.data(), n * n) < 1e-10);
 
         // funm: sin(A)^2 + cos(A)^2 == I
         keel::Array<keel::c64> SinA(n * n), CosA(n * n), sum(n * n, keel::c64(0.0, 0.0));
-        CHECK(keel::funm(Ac.data(), n, [](keel::c64 z) { return keel::sin(z); }, SinA.data()));
-        CHECK(keel::funm(Ac.data(), n, [](keel::c64 z) { return keel::cos(z); }, CosA.data()));
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        CHECK(keel::linalg::funm(Ac.data(), n, [](keel::c64 z) { return keel::sin(z); }, SinA.data()));
+        CHECK(keel::linalg::funm(Ac.data(), n, [](keel::c64 z) { return keel::cos(z); }, CosA.data()));
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    SinA.data(), n, SinA.data(), n, keel::c64(0.0, 0.0), sum.data(), n);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, n, n, n, keel::c64(1.0, 0.0),
                    CosA.data(), n, CosA.data(), n, keel::c64(1.0, 0.0), sum.data(), n);
         keel::Array<keel::c64> eye(n * n, keel::c64(0.0, 0.0));
         for (keel::usize i = 0; i < n; ++i) eye[i + i * n] = keel::c64(1.0, 0.0);
@@ -886,9 +886,9 @@ void test_matrix_functions_and_solvers() {
         const keel::f64 t = 0.7;
         for (keel::usize i = 0; i < n; ++i) v[i] = det_val(i, 3, 510);
         for (keel::usize i = 0; i < n * n; ++i) tA[i] = t * A[i];
-        CHECK(keel::expm(tA.data(), n, EtA.data()));
-        keel::gemv(keel::MatrixTranspose::NoTrans, n, n, 1.0, EtA.data(), n, v.data(), 1, 0.0, y_ref.data(), 1);
-        CHECK(keel::expmv(t, A.data(), n, v.data(), y_mv.data()));
+        CHECK(keel::linalg::expm(tA.data(), n, EtA.data()));
+        keel::linalg::gemv(keel::linalg::MatrixTranspose::NoTrans, n, n, 1.0, EtA.data(), n, v.data(), 1, 0.0, y_ref.data(), 1);
+        CHECK(keel::linalg::expmv(t, A.data(), n, v.data(), y_mv.data()));
         CHECK(max_diff(y_mv.data(), y_ref.data(), n) < 1e-10);
     }
 
@@ -903,11 +903,11 @@ void test_matrix_functions_and_solvers() {
         for (keel::usize i = 0; i < n; ++i) B[i + i * n] += keel::c64(4.0, 0.0);
         for (keel::usize i = 0; i < m * n; ++i) C[i] = det_cval(i, 11, 540);
 
-        CHECK(keel::sylvester(A.data(), m, B.data(), n, C.data(), X.data()));
+        CHECK(keel::linalg::sylvester(A.data(), m, B.data(), n, C.data(), X.data()));
         keel::Array<keel::c64> lhs(m * n, keel::c64(0.0, 0.0));
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m, n, m, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m, n, m, keel::c64(1.0, 0.0),
                    A.data(), m, X.data(), m, keel::c64(0.0, 0.0), lhs.data(), m);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m, n, n, keel::c64(1.0, 0.0),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m, n, n, keel::c64(1.0, 0.0),
                    X.data(), m, B.data(), n, keel::c64(1.0, 0.0), lhs.data(), m);
         CHECK(max_diff(lhs.data(), C.data(), m * n) < 1e-10);
     }
@@ -920,12 +920,12 @@ void test_matrix_functions_and_solvers() {
         keel::f64 d[4] = {2.0, -1.0, 3.0, 1.0};
         keel::f64 x[3] = {0.0, 0.0, 0.0};
         keel::f64 res[4] = {0.0, 0.0, 0.0, 0.0};
-        const keel::NnlsStats st = keel::lsqnonneg(C, m, n, d, x, res);
+        const keel::linalg::NnlsStats st = keel::linalg::lsqnonneg(C, m, n, d, x, res);
         CHECK(st.converged);
         for (keel::usize j = 0; j < n; ++j) CHECK(x[j] >= -1e-14);
         // KKT optimality: C^T * (d - C*x) <= tol, and == 0 for x[j] > 0
         keel::f64 grad[3] = {0.0, 0.0, 0.0};
-        keel::gemv(keel::MatrixTranspose::Trans, m, n, 1.0, C, m, res, 1, 0.0, grad, 1);
+        keel::linalg::gemv(keel::linalg::MatrixTranspose::Trans, m, n, 1.0, C, m, res, 1, 0.0, grad, 1);
         for (keel::usize j = 0; j < n; ++j) {
             CHECK(grad[j] <= 1e-10);
             if (x[j] > 1e-10) CHECK(keel::abs(grad[j]) < 1e-10);
@@ -937,7 +937,7 @@ void test_matrix_functions_and_solvers() {
         // Column-major 3x4 rank-2 matrix: rows [1, 2, 3, 4], [2, 4, 6, 8], [1, 0, 1, 2]
         keel::f64 M[12] = {1.0, 2.0, 1.0, 2.0, 4.0, 0.0, 3.0, 6.0, 1.0, 4.0, 8.0, 2.0};
         keel::usize pivs[3] = {0, 0, 0};
-        const keel::usize rank = keel::rref(M, 3, 4, -1.0, pivs);
+        const keel::usize rank = keel::linalg::rref(M, 3, 4, -1.0, pivs);
         CHECK(rank == 2);
         CHECK(pivs[0] == 0);
         CHECK(pivs[1] == 1);
@@ -956,26 +956,26 @@ void test_matrix_functions_and_solvers() {
         for (keel::usize i = 0; i < p * n; ++i) B[i] = det_val(i, 9, 560);
 
         keel::Array<keel::f64> U(m * m), V(p * n), X(n * n), C(m * n), S(p * n);
-        keel::gsvd_full(A.data(), m, B.data(), p, n, U.data(), V.data(), X.data(), C.data(), S.data());
+        keel::linalg::gsvd_full(A.data(), m, B.data(), p, n, U.data(), V.data(), X.data(), C.data(), S.data());
 
         // Check A = U * C * X^T and B = V * S * X^T
         keel::Array<keel::f64> UC(m * n, 0.0), recA(m * n, 0.0);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, m, n, m, 1.0, U.data(), m, C.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, m, n, m, 1.0, U.data(), m, C.data(),
                    m, 0.0, UC.data(), m);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::Trans, m, n, n, 1.0, UC.data(), m, X.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::Trans, m, n, n, 1.0, UC.data(), m, X.data(),
                    n, 0.0, recA.data(), m);
         CHECK(max_diff(recA.data(), A.data(), m * n) < 1e-10);
 
         keel::Array<keel::f64> VS(p * n, 0.0), recB(p * n, 0.0);
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::NoTrans, p, n, n, 1.0, V.data(), p, S.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, p, n, n, 1.0, V.data(), p, S.data(),
                    p, 0.0, VS.data(), p);
         // Note: S is p x n diagonal (p == n == 3 here).
-        keel::gemm(keel::MatrixTranspose::NoTrans, keel::MatrixTranspose::Trans, p, n, n, 1.0, VS.data(), p, X.data(),
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::Trans, p, n, n, 1.0, VS.data(), p, X.data(),
                    n, 0.0, recB.data(), p);
         CHECK(max_diff(recB.data(), B.data(), p * n) < 1e-10);
 
         keel::Array<keel::f64> sigmas(n);
-        keel::gsvd_values(A.data(), m, B.data(), p, n, sigmas.data());
+        keel::linalg::gsvd_values(A.data(), m, B.data(), p, n, sigmas.data());
         for (keel::usize i = 0; i + 1 < n; ++i) CHECK(sigmas[i] <= sigmas[i + 1]);
     }
 }
@@ -996,7 +996,7 @@ int main() {
     test_matrix_functions_and_solvers();
 
     if (g_failures == 0) {
-        std::printf("All keel::linalg tests passed.\n");
+        std::printf("All keel::linalg::linalg tests passed.\n");
         return 0;
     }
     std::fprintf(stderr, "%d test failure(s).\n", g_failures);

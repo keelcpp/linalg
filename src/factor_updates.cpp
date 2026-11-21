@@ -6,7 +6,7 @@
 #include "keel/math.h"
 #include "linalg_internal.h"
 
-namespace keel {
+namespace keel::linalg {
 
 namespace {
 
@@ -547,4 +547,4 @@ void balance_matrix(c64* B, usize n, bool permute, f64* scale, usize* perm, usiz
     balance_matrix_impl(B, n, permute, scale, perm, low_out, high_out);
 }
 
-} // namespace keel
+} // namespace keel::linalg

@@ -6,7 +6,7 @@
 #include "keel/math.h"
 #include "linalg_internal.h"
 
-namespace keel {
+namespace keel::linalg {
 
 namespace {
 
@@ -332,4 +332,4 @@ void gsvd_full(const c64* A, usize m, const c64* B, usize p, usize n, c64* U, c6
     gsvd_full_impl(A, m, B, p, n, U, V, X, C, S, alloc);
 }
 
-} // namespace keel
+} // namespace keel::linalg

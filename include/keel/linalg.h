@@ -6,7 +6,7 @@
 #include "keel/memory.h"
 #include "keel/ref.h"
 
-namespace keel {
+namespace keel::linalg {
 
 // ============================================================================
 // 1. Matrix Layout & Operation Descriptors (Column-Major BLAS/LAPACK Convention)
@@ -400,4 +400,4 @@ void gsvd_full(const f64* A, usize m, const f64* B, usize p, usize n, f64* U, f6
 void gsvd_full(const c64* A, usize m, const c64* B, usize p, usize n, c64* U, c64* V, c64* X, f64* C, f64* S,
                Allocator* alloc = nullptr) noexcept;
 
-} // namespace keel
+} // namespace keel::linalg

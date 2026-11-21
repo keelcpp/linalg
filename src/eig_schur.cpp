@@ -6,7 +6,7 @@
 #include "keel/math.h"
 #include "linalg_internal.h"
 
-namespace keel {
+namespace keel::linalg {
 
 namespace {
 
@@ -1257,4 +1257,4 @@ bool cdf2rdf(const c64* V, const c64* D, usize n, f64* VR, f64* DR) noexcept {
     return true;
 }
 
-} // namespace keel
+} // namespace keel::linalg
