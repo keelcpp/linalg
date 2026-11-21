@@ -185,7 +185,7 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
     std::atomic<keel::usize> active_threads{0};
 
     // Limit threads for small n to avoid redundant packing of A
-    keel::i32 max_threads = static_cast<keel::i32>(keel::max<keel::usize>(1, n / 16));
+    keel::i32 max_threads = as<keel::i32>(keel::max<keel::usize>(1, n / 16));
 
     keel::linalg::linalg_detail::parallel_for(n, p_thresh, [&](keel::usize jc_start, keel::usize jc_end) {
         active_threads.fetch_add(1, std::memory_order_relaxed);
@@ -525,7 +525,7 @@ if (m == 0 || n == 0) return;
     const keel::usize p_thresh = (total_flops >= kGemmParallelFlopThreshold) ? keel::usize{1} : n + 1;
 
     // Limit threads for small n to avoid redundant packing of A
-    keel::i32 max_threads = static_cast<keel::i32>(keel::max<keel::usize>(1, n / 16));
+    keel::i32 max_threads = as<keel::i32>(keel::max<keel::usize>(1, n / 16));
 
     keel::linalg::linalg_detail::parallel_for(n, p_thresh, [=](keel::usize jc_start, keel::usize jc_end) {
         const keel::usize mc_padded = ((mc_block + mr - 1) / mr) * mr;
@@ -758,7 +758,7 @@ bool LuPanelDoubleKernel(double *A, keel::usize lda, keel::i32 *piv, keel::usize
         }
 
         if (pmax == 0.0) return false;
-        piv[j] = static_cast<keel::i32>(pivot + offset_row);
+        piv[j] = as<keel::i32>(pivot + offset_row);
         if (pivot != j) {
             double *r1 = A + j;
             double *r2 = A + pivot;
@@ -869,7 +869,7 @@ bool LuPanelComplexKernel(keel::c64 *A_cplx, keel::usize lda, keel::i32 *piv, ke
         }
 
         if (pmax == 0.0) return false;
-        piv[j] = static_cast<keel::i32>(pivot + offset_row);
+        piv[j] = as<keel::i32>(pivot + offset_row);
         
         if (pivot != j) {
             keel::c64 *r1 = A_cplx + j;
@@ -1075,10 +1075,10 @@ void gemm_dispatch(keel::usize m, keel::usize n, keel::usize k,
     if constexpr (is_complex_type_v<T>) {
         gemm(MatrixTranspose::NoTrans, MatrixTranspose::NoTrans, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
     } else {
-        gemm(MatrixTranspose::NoTrans, MatrixTranspose::NoTrans, m, n, k, static_cast<double>(alpha),
+        gemm(MatrixTranspose::NoTrans, MatrixTranspose::NoTrans, m, n, k, as<double>(alpha),
              reinterpret_cast<const double*>(A), lda,
              reinterpret_cast<const double*>(B), ldb,
-             static_cast<double>(beta),
+             as<double>(beta),
              reinterpret_cast<double*>(C), ldc);
     }
 }
@@ -1117,13 +1117,13 @@ void trsm_base(MatrixSide side, MatrixUplo uplo, MatrixTranspose trans, MatrixDi
                     for (keel::usize i = k + 1; i < m; ++i) B[i + j * ldb] -= get_a(i, k) * xkj;
                 }
             } else if (uplo == MatrixUplo::Lower && trans != MatrixTranspose::NoTrans) {
-                for (keel::isize k = static_cast<keel::isize>(m) - 1; k >= 0; --k) {
+                for (keel::isize k = as<keel::isize>(m) - 1; k >= 0; --k) {
                     if (!is_unit) B[k + j * ldb] /= get_a(k, k);
                     const T xkj = B[k + j * ldb];
                     for (keel::isize i = k - 1; i >= 0; --i) B[i + j * ldb] -= get_a(i, k) * xkj;
                 }
             } else if (uplo == MatrixUplo::Upper && trans == MatrixTranspose::NoTrans) {
-                for (keel::isize k = static_cast<keel::isize>(m) - 1; k >= 0; --k) {
+                for (keel::isize k = as<keel::isize>(m) - 1; k >= 0; --k) {
                     if (!is_unit) B[k + j * ldb] /= get_a(k, k);
                     const T xkj = B[k + j * ldb];
                     if (xkj == T(0)) continue;
@@ -1144,7 +1144,7 @@ void trsm_base(MatrixSide side, MatrixUplo uplo, MatrixTranspose trans, MatrixDi
             }
         }
         if (uplo == MatrixUplo::Lower && trans == MatrixTranspose::NoTrans) {
-            for (keel::isize k = static_cast<keel::isize>(n) - 1; k >= 0; --k) {
+            for (keel::isize k = as<keel::isize>(n) - 1; k >= 0; --k) {
                 if (!is_unit) {
                     T akk = get_a(k, k);
                     for (keel::usize i = 0; i < m; ++i) B[i + k * ldb] /= akk;
@@ -1177,7 +1177,7 @@ void trsm_base(MatrixSide side, MatrixUplo uplo, MatrixTranspose trans, MatrixDi
                 }
             }
         } else { // Upper + Trans
-            for (keel::isize k = static_cast<keel::isize>(n) - 1; k >= 0; --k) {
+            for (keel::isize k = as<keel::isize>(n) - 1; k >= 0; --k) {
                 if (!is_unit) {
                     T akk = get_a(k, k);
                     for (keel::usize i = 0; i < m; ++i) B[i + k * ldb] /= akk;

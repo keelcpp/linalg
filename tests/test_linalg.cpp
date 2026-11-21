@@ -20,13 +20,13 @@ void check(bool cond, const char* expr, int line) {
 #define CHECK(expr) check((expr), #expr, __LINE__)
 
 keel::f64 det_val(keel::usize i, keel::usize j, keel::usize seed) {
-    keel::u64 z = static_cast<keel::u64>(i) * 0x9e3779b97f4a7c15ULL +
-                  static_cast<keel::u64>(j) * 0xbf58476d1ce4e5b9ULL +
-                  static_cast<keel::u64>(seed) * 0x94d049bb133111ebULL + 0x123456789abcdef0ULL;
+    keel::u64 z = keel::as<keel::u64>(i) * 0x9e3779b97f4a7c15ULL +
+                  keel::as<keel::u64>(j) * 0xbf58476d1ce4e5b9ULL +
+                  keel::as<keel::u64>(seed) * 0x94d049bb133111ebULL + 0x123456789abcdef0ULL;
     z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
     z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
     z ^= (z >> 31);
-    return (static_cast<keel::f64>(z >> 11) * (1.0 / 9007199254740992.0)) * 2.0 - 1.0;
+    return (keel::as<keel::f64>(z >> 11) * (1.0 / 9007199254740992.0)) * 2.0 - 1.0;
 }
 
 keel::c64 det_cval(keel::usize i, keel::usize j, keel::usize seed) {
@@ -73,7 +73,7 @@ void test_blas1() {
     keel::f64 y[5] = {10.0, 20.0, 30.0, 40.0, 50.0};
     keel::linalg::axpy(5, 2.5, x, y);
     for (keel::usize i = 0; i < 5; ++i) {
-        CHECK(keel::abs(y[i] - (10.0 * static_cast<keel::f64>(i + 1) + 2.5 * x[i])) < 1e-12);
+        CHECK(keel::abs(y[i] - (10.0 * keel::as<keel::f64>(i + 1) + 2.5 * x[i])) < 1e-12);
     }
 
     CHECK(keel::abs(keel::linalg::dot(5, x, x) - 55.0) < 1e-12);
@@ -212,7 +212,7 @@ void test_trsm_and_syrk() {
     keel::Array<keel::f64> X(m * n);
     for (keel::usize j = 0; j < m; ++j) {
         for (keel::usize i = 0; i <= j; ++i) {
-            U[i + j * m] = (i == j) ? (3.0 + static_cast<keel::f64>(i) * 0.2) : det_val(i, j, 55);
+            U[i + j * m] = (i == j) ? (3.0 + keel::as<keel::f64>(i) * 0.2) : det_val(i, j, 55);
         }
     }
     for (keel::usize i = 0; i < m * n; ++i) B[i] = X[i] = det_val(i, 4, 56);
@@ -295,7 +295,7 @@ void test_solve_lu_inv() {
         keel::Array<keel::f64> b(m, 0.0);
         keel::Array<keel::f64> x(n, 0.0);
         for (keel::usize j = 0; j < n; ++j) {
-            x_true[j] = static_cast<keel::f64>(j + 1);
+            x_true[j] = keel::as<keel::f64>(j + 1);
             for (keel::usize i = 0; i < m; ++i) A[i + j * m] = det_val(i, j, 90);
         }
         keel::linalg::gemv(m, n, 1.0, A.data(), m, x_true.data(), 1, 0.0, b.data(), 1);
@@ -513,7 +513,7 @@ void test_factor_updates_ldl_balance() {
         keel::Array<keel::f64> PA(m * n);
         for (keel::usize i = 0; i < m * n; ++i) PA[i] = A[i];
         for (keel::usize j = 0; j < m; ++j) {
-            const keel::usize p = static_cast<keel::usize>(piv[j]);
+            const keel::usize p = keel::as<keel::usize>(piv[j]);
             if (p != j) {
                 for (keel::usize c = 0; c < n; ++c) keel::swap(PA[j + c * m], PA[p + c * m]);
             }

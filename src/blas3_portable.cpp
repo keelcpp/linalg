@@ -82,7 +82,7 @@ void gemm_portable(MatrixTranspose transa, MatrixTranspose transb,
 
     // Update global atomic for test determinism check
 #if defined(KEEL_LINALG_WITH_THREADS)
-    keel::linalg::linalg_detail::g_last_gemm_threads_used.store(static_cast<keel::i32>(keel::ThreadPool::global().num_workers()));
+    keel::linalg::linalg_detail::g_last_gemm_threads_used.store(as<keel::i32>(keel::ThreadPool::global().num_workers()));
 #else
     keel::linalg::linalg_detail::g_last_gemm_threads_used.store(1);
 #endif
@@ -488,7 +488,7 @@ for (keel::usize j = 0; j < n; ++j) {
         }
 
         if (pmax == 0.0) return false;
-        piv[j] = static_cast<keel::i32>(pivot + offset_row);
+        piv[j] = as<keel::i32>(pivot + offset_row);
         if (pivot != j) {
             for (keel::usize col = 0; col < n; ++col) {
                 keel::swap(A[j + col * lda], A[pivot + col * lda]);
@@ -538,7 +538,7 @@ bool lu_panel(double *A, keel::usize lda, keel::i32 *piv, keel::usize m, keel::u
         
         if (pmax == 0.0) return false;
         
-        piv[j] = static_cast<keel::i32>(pivot + offset_row);
+        piv[j] = as<keel::i32>(pivot + offset_row);
         
         if (pivot != j) {
             for (keel::usize col = 0; col < n; ++col) {

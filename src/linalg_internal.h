@@ -21,7 +21,7 @@ inline void parallel_for(usize n, usize threshold, F&& fn, u32 max_workers = 0) 
     (void)threshold;
     (void)max_workers;
     if (n > 0) {
-        fn(static_cast<usize>(0), n);
+        fn(as<usize>(0), n);
     }
 #endif
 }

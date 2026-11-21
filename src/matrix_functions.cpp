@@ -98,8 +98,8 @@ void upper_tri_sqrt(const c64* T, usize n, c64* R) noexcept {
     for (usize i = 0; i < n; ++i) R[i + i * n] = keel::sqrt(T[i + i * n]);
 
     for (usize j = 1; j < n; ++j) {
-        for (isize i = static_cast<isize>(j) - 1; i >= 0; --i) {
-            const usize ui = static_cast<usize>(i);
+        for (isize i = as<isize>(j) - 1; i >= 0; --i) {
+            const usize ui = as<usize>(i);
             c64 sum = T[ui + j * n];
             for (usize k = ui + 1; k < j; ++k) sum -= R[ui + k * n] * R[k + j * n];
             c64 denom = R[ui + ui * n] + R[j + j * n];
@@ -185,7 +185,7 @@ bool logm(const c64* A, usize n, c64* X, Allocator* alloc) noexcept {
         }
         keel::mem_copy(Ek.data(), Ek_next.data(), n * n * sizeof(c64));
 
-        const f64 coef = ((k % 2 == 1) ? 1.0 : -1.0) / static_cast<f64>(k);
+        const f64 coef = ((k % 2 == 1) ? 1.0 : -1.0) / as<f64>(k);
         for (usize i = 0; i < n * n; ++i) log_t[i] += coef * Ek[i];
     }
 
@@ -208,8 +208,8 @@ bool funm(const c64* A, usize n, FunctionRef<c64(c64)> f, c64* X, Allocator* all
     for (usize i = 0; i < n; ++i) F[i + i * n] = f(T[i + i * n]);
 
     for (usize j = 1; j < n; ++j) {
-        for (isize i = static_cast<isize>(j) - 1; i >= 0; --i) {
-            const usize ui = static_cast<usize>(i);
+        for (isize i = as<isize>(j) - 1; i >= 0; --i) {
+            const usize ui = as<usize>(i);
             const c64 denom = T[ui + ui * n] - T[j + j * n];
             if (keel::abs(denom) > 1e-12) {
                 c64 sum = F[ui + ui * n] * T[ui + j * n] - T[ui + j * n] * F[j + j * n];
@@ -254,8 +254,8 @@ bool sylvester(const c64* A, usize m, const c64* B, usize n, const c64* C, c64* 
 
     Array<c64> Y(m * n, c64(0.0, 0.0), scratch.allocator());
     for (usize j = 0; j < n; ++j) {
-        for (isize i = static_cast<isize>(m) - 1; i >= 0; --i) {
-            const usize ui = static_cast<usize>(i);
+        for (isize i = as<isize>(m) - 1; i >= 0; --i) {
+            const usize ui = as<usize>(i);
             c64 s = C_tilde[ui + j * m];
             for (usize k = ui + 1; k < m; ++k) s -= Ta[ui + k * m] * Y[k + j * m];
             for (usize k = 0; k < j; ++k) s -= Y[ui + k * m] * Tb[k + j * n];

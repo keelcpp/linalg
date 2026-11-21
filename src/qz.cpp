@@ -164,8 +164,8 @@ bool qz_factor(const c64* A, const c64* B, usize n, c64* AA, c64* BB, c64* Q, c6
 
     // Step 1: Reduce BB to upper-triangular via left Givens rotations.
     for (usize k = 0; k < n; ++k) {
-        for (isize i = static_cast<isize>(n) - 1; i > static_cast<isize>(k); --i) {
-            const usize ui = static_cast<usize>(i);
+        for (isize i = as<isize>(n) - 1; i > as<isize>(k); --i) {
+            const usize ui = as<usize>(i);
             if (BB[ui + k * n] != c64(0.0, 0.0)) {
                 f64 c = 0.0;
                 c64 s(0.0, 0.0);
@@ -180,8 +180,8 @@ bool qz_factor(const c64* A, const c64* B, usize n, c64* AA, c64* BB, c64* Q, c6
 
     // Step 2: Reduce AA to upper Hessenberg while preserving upper-triangular BB.
     for (usize j = 0; j < n; ++j) {
-        for (isize i = static_cast<isize>(n) - 1; i >= static_cast<isize>(j) + 2; --i) {
-            const usize ui = static_cast<usize>(i);
+        for (isize i = as<isize>(n) - 1; i >= as<isize>(j) + 2; --i) {
+            const usize ui = as<usize>(i);
             if (AA[ui + j * n] != c64(0.0, 0.0)) {
                 f64 c = 0.0;
                 c64 s(0.0, 0.0);
@@ -296,7 +296,7 @@ bool qz_factor(const c64* A, const c64* B, usize n, c64* AA, c64* BB, c64* Q, c6
             c64 shift(0.0, 0.0);
             if (local_iter % 15 == 0) {
                 const f64 mag = keel::abs(a22) + keel::abs(a21) + 1.0;
-                const f64 ang = 0.7 * static_cast<f64>(local_iter / 15);
+                const f64 ang = 0.7 * as<f64>(local_iter / 15);
                 shift = a22 + keel::polar(0.75 * mag, ang);
             } else {
                 const c64 half_diff = 0.5 * (a11 - a22);
@@ -388,10 +388,10 @@ void qz_eigenvectors(const c64* AA, const c64* BB, const c64* Z, usize n, c64* V
     }
     const f64 eps = Limits<f64>::kEpsilon;
     const f64 ab_scale = linalg_detail::linalg_max(1.0, linalg_detail::linalg_max(a_max, b_max));
-    const f64 back_tol = 64.0 * static_cast<f64>(n) * eps * ab_scale;
-    const f64 smin = linalg_detail::linalg_max(eps * ab_scale, Limits<f64>::kMinPositive * (static_cast<f64>(n) / eps));
-    const f64 b_zero_tol = 64.0 * static_cast<f64>(n) * eps * linalg_detail::linalg_max(1.0, b_max);
-    const f64 a_zero_tol = 64.0 * static_cast<f64>(n) * eps * linalg_detail::linalg_max(1.0, a_max);
+    const f64 back_tol = 64.0 * as<f64>(n) * eps * ab_scale;
+    const f64 smin = linalg_detail::linalg_max(eps * ab_scale, Limits<f64>::kMinPositive * (as<f64>(n) / eps));
+    const f64 b_zero_tol = 64.0 * as<f64>(n) * eps * linalg_detail::linalg_max(1.0, b_max);
+    const f64 a_zero_tol = 64.0 * as<f64>(n) * eps * linalg_detail::linalg_max(1.0, a_max);
 
     ArenaTemp scratch = get_scratch(alloc);
     Array<c64> Y(n * n, c64(0.0, 0.0), scratch.allocator());
@@ -406,8 +406,8 @@ void qz_eigenvectors(const c64* AA, const c64* BB, const c64* Z, usize n, c64* V
         }
         Y[k + k * n] = c64(1.0, 0.0);
         f64 max_y = 1.0;
-        for (isize i = static_cast<isize>(k) - 1; i >= 0; --i) {
-            const usize ui = static_cast<usize>(i);
+        for (isize i = as<isize>(k) - 1; i >= 0; --i) {
+            const usize ui = as<usize>(i);
             c64 sum(0.0, 0.0);
             for (usize j = ui + 1; j <= k; ++j) {
                 const c64 mij = beta * AA[ui + j * n] - alpha * BB[ui + j * n];

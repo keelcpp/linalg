@@ -36,7 +36,7 @@ usize rref_impl(T* B, usize m, usize n, f64 tol_in, usize* pivot_cols) noexcept 
     if (tol < 0.0) {
         const f64 anorm = matrix_inf_norm(B, m, n);
         const f64 eps_anorm = (anorm == 0.0) ? Limits<f64>::kEpsilon : ulp_positive(anorm);
-        tol = static_cast<f64>(linalg_detail::linalg_max(m, n)) * eps_anorm;
+        tol = as<f64>(linalg_detail::linalg_max(m, n)) * eps_anorm;
     }
 
     usize row = 0;
@@ -203,7 +203,7 @@ NnlsStats lsqnonneg(const f64* C, usize m, usize n, const f64* d, f64* x, f64* r
     f64 cnorm = 0.0;
     for (usize k = 0; k < m * n; ++k) cnorm = linalg_detail::linalg_max(cnorm, keel::abs(C[k]));
     const f64 tol = 10.0 * Limits<f64>::kEpsilon * linalg_detail::linalg_max(cnorm, 1.0) *
-                    static_cast<f64>(linalg_detail::linalg_max(m, n));
+                    as<f64>(linalg_detail::linalg_max(m, n));
 
     Array<u8> in_z(n, u8{1}, scratch.allocator());
     Array<f64> w(n, 0.0, scratch.allocator());

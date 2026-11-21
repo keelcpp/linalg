@@ -67,7 +67,7 @@ bool lu_recursive_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, 
         for (keel::usize col = c_start; col < c_end; ++col) {
             T *col_ptr = A + (n1 + col) * lda;
             for (keel::usize i = 0; i < n1; ++i) {
-                keel::usize p = static_cast<keel::usize>(piv[i] - offset_row);
+                keel::usize p = as<keel::usize>(piv[i] - offset_row);
                 if (p != i) {
                     keel::swap(col_ptr[i], col_ptr[p]);
                 }
@@ -117,7 +117,7 @@ bool lu_recursive_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, 
         for (keel::usize col = c_start; col < c_end; ++col) {
             T *col_ptr = A + n1 + col * lda;
             for (keel::usize i = 0; i < n2; ++i) {
-                keel::usize p = static_cast<keel::usize>(piv[n1 + i] - (offset_row + n1));
+                keel::usize p = as<keel::usize>(piv[n1 + i] - (offset_row + n1));
                 if (p != i) {
                     keel::swap(col_ptr[i], col_ptr[p]);
                 }
@@ -221,7 +221,7 @@ bool la_solve_small_fastpath(const T *A, keel::usize lda,
     }
 
     for (keel::usize i = 0; i < n; ++i) {
-        keel::usize p = static_cast<keel::usize>(piv_stack[i]);
+        keel::usize p = as<keel::usize>(piv_stack[i]);
         if (p != i) {
             T *r1 = X + i;
             T *r2 = X + p;
@@ -271,8 +271,8 @@ bool la_solve_small_fastpath(const T *A, keel::usize lda,
             }
             
             // Backward substitution
-            for (keel::isize k_idx = static_cast<keel::isize>(n) - 1; k_idx >= 0; --k_idx) {
-                const keel::usize k = static_cast<keel::usize>(k_idx);
+            for (keel::isize k_idx = as<keel::isize>(n) - 1; k_idx >= 0; --k_idx) {
+                const keel::usize k = as<keel::usize>(k_idx);
                 const double diag = reinterpret_cast<const double*>(LU_stack)[k + k * n];
                 x_col0[k] /= diag; x_col1[k] /= diag; x_col2[k] /= diag; x_col3[k] /= diag;
                 const double x0 = x_col0[k];
@@ -323,14 +323,14 @@ bool la_solve_small_fastpath(const T *A, keel::usize lda,
                 }
             }
         }
-        for (keel::isize k = static_cast<keel::isize>(n) - 1; k >= 0; --k) {
+        for (keel::isize k = as<keel::isize>(n) - 1; k >= 0; --k) {
             x_col[k] /= LU_stack[k + k * n];
             const T xkj = x_col[k];
             if (xkj == T(0)) continue;
             if constexpr (keel::IsSame<T, double>) {
                 const double *u_col = LU_stack + k * n;
                 double *y_ptr = x_col;
-                const keel::usize rem = static_cast<keel::usize>(k);
+                const keel::usize rem = as<keel::usize>(k);
                 const double neg_x = -xkj;
                 keel::linalg::axpy(rem, neg_x, u_col, y_ptr);
             } else {
@@ -435,13 +435,13 @@ void trsm_L_blocked_seq(keel::usize n, keel::usize nrhs, const T *A, keel::usize
 template <typename T>
 void trsm_U_blocked_seq(keel::usize n, keel::usize nrhs, const T *A, keel::usize lda, T *B, keel::usize ldb) {
     constexpr keel::usize nb = 64;
-    for (keel::isize j_idx = static_cast<keel::isize>(n) - 1; j_idx >= 0; j_idx -= nb) {
-        const keel::usize j = static_cast<keel::usize>(keel::max(keel::isize{0}, j_idx - static_cast<keel::isize>(nb) + 1));
-        const keel::usize jb = static_cast<keel::usize>(j_idx) - j + 1;
+    for (keel::isize j_idx = as<keel::isize>(n) - 1; j_idx >= 0; j_idx -= nb) {
+        const keel::usize j = as<keel::usize>(keel::max(keel::isize{0}, j_idx - as<keel::isize>(nb) + 1));
+        const keel::usize jb = as<keel::usize>(j_idx) - j + 1;
         
         // Solve U_jj * X_j = B_j
-        for (keel::isize k_idx = static_cast<keel::isize>(jb) - 1; k_idx >= 0; --k_idx) {
-            const keel::usize k = static_cast<keel::usize>(k_idx);
+        for (keel::isize k_idx = as<keel::isize>(jb) - 1; k_idx >= 0; --k_idx) {
+            const keel::usize k = as<keel::usize>(k_idx);
             const T* u_col = A + (j + k) * lda;
             const T akk = u_col[j + k];
             for (keel::usize c = 0; c < nrhs; ++c) {
@@ -510,7 +510,7 @@ bool lu_blocked_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, ke
                 for (keel::usize col = c_start; col < c_end; ++col) {
                     T *col_ptr = A + j + col * lda;
                     for (keel::usize i = 0; i < jb; ++i) {
-                        keel::usize p = static_cast<keel::usize>(piv[j + i] - (offset_row + j));
+                        keel::usize p = as<keel::usize>(piv[j + i] - (offset_row + j));
                         if (p != i) {
                             keel::swap(col_ptr[i], col_ptr[p]);
                         }
@@ -529,7 +529,7 @@ bool lu_blocked_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, ke
                 for (keel::usize col = c_start; col < c_end; ++col) {
                     T *col_ptr = A_right + col * lda;
                     for (keel::usize i = 0; i < jb; ++i) {
-                        keel::usize p = static_cast<keel::usize>(piv[j + i] - (offset_row + j));
+                        keel::usize p = as<keel::usize>(piv[j + i] - (offset_row + j));
                         if (p != i) {
                             keel::swap(col_ptr[i], col_ptr[p]);
                         }
@@ -597,7 +597,7 @@ bool la_solve_impl(const T *A, keel::usize m, keel::usize n, const T *B, keel::u
             for (keel::usize col = c_start; col < c_end; ++col) {
                 T *col_ptr = X + col * n;
                 for (keel::usize k = 0; k < n; ++k) {
-                    keel::usize p = static_cast<keel::usize>(piv_ptr[k]);
+                    keel::usize p = as<keel::usize>(piv_ptr[k]);
                     if (p != k) {
                         keel::swap(col_ptr[k], col_ptr[p]);
                     }
@@ -660,7 +660,7 @@ static bool lu_factor_general_impl(T* LU, usize m, usize n, i32* piv) noexcept {
                 p = i;
             }
         }
-        piv[j] = static_cast<i32>(p);
+        piv[j] = as<i32>(p);
         if (p != j) {
             for (usize c = 0; c < n; ++c) {
                 keel::swap(LU[j + c * m], LU[p + c * m]);

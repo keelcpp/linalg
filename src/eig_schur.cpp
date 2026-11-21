@@ -403,14 +403,14 @@ void hess_reduce_impl(T* A, usize n, T* P, Allocator* alloc) noexcept {
 void francis_schur(f64* H, f64* Z, usize n) noexcept {
     if (n < 3) return;
     auto h = [&](isize i, isize j) noexcept -> f64& {
-        return H[static_cast<usize>(i) + static_cast<usize>(j) * n];
+        return H[as<usize>(i) + as<usize>(j) * n];
     };
     auto z = [&](isize i, isize j) noexcept -> f64& {
-        return Z[static_cast<usize>(i) + static_cast<usize>(j) * n];
+        return Z[as<usize>(i) + as<usize>(j) * n];
     };
 
     const f64 eps = Limits<f64>::kEpsilon;
-    const isize N = static_cast<isize>(n);
+    const isize N = as<isize>(n);
 
     f64 hnorm = 0.0;
     for (usize j = 0; j < n; ++j) {
@@ -420,7 +420,7 @@ void francis_schur(f64* H, f64* Z, usize n) noexcept {
         if (col_sum > hnorm) hnorm = col_sum;
     }
     if (hnorm == 0.0) return;
-    const f64 smlnum = Limits<f64>::kMinPositive * (static_cast<f64>(n) / eps);
+    const f64 smlnum = Limits<f64>::kMinPositive * (as<f64>(n) / eps);
 
     isize p = N - 1;
     i32 iter = 0;
@@ -517,12 +517,12 @@ void francis_schur(f64* H, f64* Z, usize n) noexcept {
 void standardize_schur_2x2(f64* H, f64* Z, usize n) noexcept {
     if (n < 2) return;
     auto h = [&](isize i, isize j) noexcept -> f64& {
-        return H[static_cast<usize>(i) + static_cast<usize>(j) * n];
+        return H[as<usize>(i) + as<usize>(j) * n];
     };
     auto z = [&](isize i, isize j) noexcept -> f64& {
-        return Z[static_cast<usize>(i) + static_cast<usize>(j) * n];
+        return Z[as<usize>(i) + as<usize>(j) * n];
     };
-    const isize N = static_cast<isize>(n);
+    const isize N = as<isize>(n);
 
     for (isize k = 0; k + 1 < N; ++k) {
         if (h(k + 1, k) == 0.0) continue;
@@ -579,14 +579,14 @@ void standardize_schur_2x2(f64* H, f64* Z, usize n) noexcept {
 bool complex_schur_qr(c64* H, c64* Z, usize n) noexcept {
     if (n < 2) return true;
     auto h = [&](isize i, isize j) noexcept -> c64& {
-        return H[static_cast<usize>(i) + static_cast<usize>(j) * n];
+        return H[as<usize>(i) + as<usize>(j) * n];
     };
     auto z = [&](isize i, isize j) noexcept -> c64& {
-        return Z[static_cast<usize>(i) + static_cast<usize>(j) * n];
+        return Z[as<usize>(i) + as<usize>(j) * n];
     };
 
     const f64 eps = Limits<f64>::kEpsilon;
-    const isize N = static_cast<isize>(n);
+    const isize N = as<isize>(n);
 
     isize p = N - 1;
     isize iter = 0;
@@ -930,7 +930,7 @@ bool eigs_sym_generalized_smallest_abs(const f64* A, const f64* B, usize n, usiz
         seed ^= seed << 25;
         seed ^= seed >> 27;
         const f64 val =
-            static_cast<f64>(static_cast<i64>(seed * 0x2545F4914F6CDD1DULL)) * (1.0 / 9223372036854775808.0);
+            as<f64>(as<i64>(seed * 0x2545F4914F6CDD1DULL)) * (1.0 / 9223372036854775808.0);
         q0[i] = val;
         norm0 += val * val;
     }
@@ -1099,9 +1099,9 @@ void schur_eigenvectors(const c64* U, const c64* T, usize n, c64* V, c64* evals,
     f64 t_max = 0.0;
     for (usize i = 0; i < n * n; ++i) t_max = linalg_detail::linalg_max(t_max, keel::abs(T[i]));
     const f64 eps = Limits<f64>::kEpsilon;
-    const f64 back_tol = 64.0 * static_cast<f64>(n) * eps * linalg_detail::linalg_max(1.0, t_max);
+    const f64 back_tol = 64.0 * as<f64>(n) * eps * linalg_detail::linalg_max(1.0, t_max);
     const f64 smin = linalg_detail::linalg_max(eps * linalg_detail::linalg_max(1.0, t_max),
-                                               Limits<f64>::kMinPositive * (static_cast<f64>(n) / eps));
+                                               Limits<f64>::kMinPositive * (as<f64>(n) / eps));
 
     ArenaTemp scratch = get_scratch(alloc);
     Array<c64> Y(n * n, c64(0.0, 0.0), scratch.allocator());
@@ -1110,8 +1110,8 @@ void schur_eigenvectors(const c64* U, const c64* T, usize n, c64* V, c64* evals,
         const c64 lam = T[k + k * n];
         Y[k + k * n] = c64(1.0, 0.0);
         f64 max_y = 1.0;
-        for (isize i = static_cast<isize>(k) - 1; i >= 0; --i) {
-            const usize ui = static_cast<usize>(i);
+        for (isize i = as<isize>(k) - 1; i >= 0; --i) {
+            const usize ui = as<usize>(i);
             c64 sum(0.0, 0.0);
             for (usize j = ui + 1; j <= k; ++j) sum += T[ui + j * n] * Y[j + k * n];
             c64 denom = T[ui + ui * n] - lam;
@@ -1148,8 +1148,8 @@ void ordschur_complex(c64* U, c64* T, usize n, const u8* select, Allocator* allo
     for (usize i = 0; i < n; ++i) sel[i] = (select[i] != 0) ? u8{1} : u8{0};
 
     for (usize i = 0; i < n; ++i) {
-        for (isize j = static_cast<isize>(n) - 2; j >= static_cast<isize>(i); --j) {
-            const usize uj = static_cast<usize>(j);
+        for (isize j = as<isize>(n) - 2; j >= as<isize>(i); --j) {
+            const usize uj = as<usize>(j);
             if (sel[uj + 1] != 0 && sel[uj] == 0) {
                 swap_adjacent_schur(T, U, n, uj);
                 keel::swap(sel[uj], sel[uj + 1]);

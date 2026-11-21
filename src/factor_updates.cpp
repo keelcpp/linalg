@@ -66,8 +66,8 @@ void balance_permute(T* B, usize n, usize& low, usize& high, usize* perm) noexce
         found = false;
 
         // Search for isolated rows in [low, high].
-        for (isize i = static_cast<isize>(high); i >= static_cast<isize>(low); --i) {
-            const usize ui = static_cast<usize>(i);
+        for (isize i = as<isize>(high); i >= as<isize>(low); --i) {
+            const usize ui = as<usize>(i);
             bool isolated = true;
             for (usize j = low; j <= high; ++j) {
                 if (j == ui) continue;
@@ -466,7 +466,7 @@ usize ldl_factor(const f64* A, usize n, f64* L, f64* D, Allocator* alloc) noexce
     f64 anorm = 0.0;
     for (usize k = 0; k < n * n; ++k) anorm += A_sym[k] * A_sym[k];
     anorm = keel::sqrt(anorm);
-    const f64 tol = linalg_detail::linalg_max(1e-300, anorm * Limits<f64>::kEpsilon * static_cast<f64>(n));
+    const f64 tol = linalg_detail::linalg_max(1e-300, anorm * Limits<f64>::kEpsilon * as<f64>(n));
 
     for (usize k = 0; k < n * n; ++k) L[k] = 0.0;
 
@@ -510,7 +510,7 @@ usize ldl_factor(const c64* A, usize n, c64* L, f64* D, Allocator* alloc) noexce
     f64 anorm = 0.0;
     for (usize k = 0; k < n * n; ++k) anorm += keel::norm(A_herm[k]);
     anorm = keel::sqrt(anorm);
-    const f64 tol = linalg_detail::linalg_max(1e-300, anorm * Limits<f64>::kEpsilon * static_cast<f64>(n));
+    const f64 tol = linalg_detail::linalg_max(1e-300, anorm * Limits<f64>::kEpsilon * as<f64>(n));
 
     for (usize k = 0; k < n * n; ++k) L[k] = c64(0.0, 0.0);
 
