@@ -18,9 +18,9 @@ namespace HWY_NAMESPACE {
 namespace hn = hwy::HWY_NAMESPACE;
 
 void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
-                      double alpha, const double *A, keel::usize lda,
-                      const double *B, keel::usize ldb,
-                      double beta, double *C, keel::usize ldc)
+                      keel::f64 alpha, const keel::f64 *A, keel::usize lda,
+                      const keel::f64 *B, keel::usize ldb,
+                      keel::f64 beta, keel::f64 *C, keel::usize ldc)
 {
     if (m == 0 || n == 0) return;
 
@@ -43,7 +43,7 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
         return;
     }
 
-    const hn::ScalableTag<double> d;
+    const hn::ScalableTag<keel::f64> d;
     const keel::usize N = hn::Lanes(d);
 
     // BLIS blocking parameters
@@ -56,8 +56,8 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
 
     // Zero-allocation stack-based fast path for small matrices (m, n, k <= 64)
     if (m <= 64 && n <= 64 && k <= 64) {
-        alignas(64) double A_pack[144 * 64 + 64];
-        alignas(64) double B_pack[144 * 64 + 64];
+        alignas(64) keel::f64 A_pack[144 * 64 + 64];
+        alignas(64) keel::f64 B_pack[144 * 64 + 64];
 
         const keel::usize mc = m;
         const keel::usize nc = n;
@@ -66,7 +66,7 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
         // Pack B (kc x nc) into row-panels of width nr
         for (keel::usize jr = 0; jr < nc; jr += nr) {
             keel::usize cur_nr = keel::min(nr, nc - jr);
-            double *b_p = B_pack + jr * kc;
+            keel::f64 *b_p = B_pack + jr * kc;
             for (keel::usize kk = 0; kk < kc; ++kk) {
                 for (keel::usize c = 0; c < cur_nr; ++c) {
                     b_p[kk * nr + c] = B[kk + (jr + c) * ldb];
@@ -80,9 +80,9 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
         // Pack A (mc x kc) into column-panels of height mr
         for (keel::usize ii = 0; ii < mc; ii += mr) {
             keel::usize cur_mr = keel::min(mr, mc - ii);
-            double *a_p = A_pack + ii * kc;
+            keel::f64 *a_p = A_pack + ii * kc;
             for (keel::usize kk = 0; kk < kc; ++kk) {
-                const double *a_col = A + ii + kk * lda;
+                const keel::f64 *a_col = A + ii + kk * lda;
                 for (keel::usize r = 0; r < cur_mr; ++r) {
                     a_p[kk * mr + r] = a_col[r];
                 }
@@ -95,12 +95,12 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
         // SIMD Highway Kernel over C
         for (keel::usize jr = 0; jr < nc; jr += nr) {
             keel::usize cur_nr = keel::min(nr, nc - jr);
-            const double *b_p_tile = B_pack + jr * kc;
+            const keel::f64 *b_p_tile = B_pack + jr * kc;
 
             for (keel::usize ir = 0; ir < mc; ir += mr) {
                 keel::usize cur_mr = keel::min(mr, mc - ir);
-                const double *a_p = A_pack + ir * kc;
-                double *c_ptr = C + ir + jr * ldc;
+                const keel::f64 *a_p = A_pack + ir * kc;
+                keel::f64 *c_ptr = C + ir + jr * ldc;
 
                 if (cur_mr == mr && cur_nr == nr) {
                     auto c00 = hn::Zero(d), c01 = hn::Zero(d), c02 = hn::Zero(d), c03 = hn::Zero(d), c04 = hn::Zero(d), c05 = hn::Zero(d);
@@ -110,7 +110,7 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
                         auto a0 = hn::LoadU(d, a_p + kk * mr + 0 * N);
                         auto a1 = hn::LoadU(d, a_p + kk * mr + 1 * N);
 
-                        const double *b_col = b_p_tile + kk * nr;
+                        const keel::f64 *b_col = b_p_tile + kk * nr;
                         auto b0 = hn::Set(d, b_col[0]);
                         auto b1 = hn::Set(d, b_col[1]);
                         auto b2 = hn::Set(d, b_col[2]);
@@ -131,7 +131,7 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
 
                     #define STORE_COL_FAST(col_idx, acc0, acc1) \
                     { \
-                        double *col_c = c_ptr + col_idx * ldc; \
+                        keel::f64 *col_c = c_ptr + col_idx * ldc; \
                         auto r0 = hn::Mul(acc0, v_alpha); \
                         auto r1 = hn::Mul(acc1, v_alpha); \
                         if (beta != 0.0) { \
@@ -151,10 +151,10 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
                     #undef STORE_COL_FAST
                 } else {
                     for (keel::usize c = 0; c < cur_nr; ++c) {
-                        double *col_c = c_ptr + c * ldc;
-                        const double *b_col = b_p_tile + c;
+                        keel::f64 *col_c = c_ptr + c * ldc;
+                        const keel::f64 *b_col = b_p_tile + c;
                         for (keel::usize r = 0; r < cur_mr; ++r) {
-                            double acc = 0.0;
+                            keel::f64 acc = 0.0;
                             for (keel::usize kk = 0; kk < kc; ++kk) {
                                 acc += a_p[kk * mr + r] * b_col[kk * nr];
                             }
@@ -192,24 +192,24 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
         const keel::usize mc_padded = ((mc_block + mr - 1) / mr) * mr;
         constexpr keel::usize nc_padded = ((nc_block + nr - 1) / nr) * nr;
         // Zero-allocation thread_local static packing buffers (persisted per thread)
-        thread_local static keel::Array<double> A_pack(mc_padded * kc_block + 64, 0.0, nullptr);
-        thread_local static keel::Array<double> B_pack(kc_block * nc_padded + 64, 0.0, nullptr);
+        thread_local static keel::Array<keel::f64> A_pack(mc_padded * kc_block + 64, 0.0, nullptr);
+        thread_local static keel::Array<keel::f64> B_pack(kc_block * nc_padded + 64, 0.0, nullptr);
         if (A_pack.size() < mc_padded * kc_block + 64)
-            A_pack = keel::Array<double>(mc_padded * kc_block + 64, 0.0, nullptr);
+            A_pack = keel::Array<keel::f64>(mc_padded * kc_block + 64, 0.0, nullptr);
         if (B_pack.size() < kc_block * nc_padded + 64)
-            B_pack = keel::Array<double>(kc_block * nc_padded + 64, 0.0, nullptr);
+            B_pack = keel::Array<keel::f64>(kc_block * nc_padded + 64, 0.0, nullptr);
 
         for (keel::usize jc = jc_start; jc < jc_end; jc += nc_block) {
             keel::usize nc = keel::min(nc_block, jc_end - jc);
 
             for (keel::usize pc = 0; pc < k; pc += kc_block) {
                 keel::usize kc = keel::min(kc_block, k - pc);
-                double current_beta = (pc == 0) ? beta : 1.0;
+                keel::f64 current_beta = (pc == 0) ? beta : 1.0;
 
                 // Pack B panel ONCE per (jc, pc) tile
                 for (keel::usize jr = 0; jr < nc; jr += nr) {
                     keel::usize cur_nr = keel::min(nr, nc - jr);
-                    double *b_p = B_pack.data() + jr * kc;
+                    keel::f64 *b_p = B_pack.data() + jr * kc;
                     for (keel::usize kk = 0; kk < kc; ++kk) {
                         for (keel::usize c = 0; c < cur_nr; ++c) {
                             b_p[kk * nr + c] = B[(pc + kk) + (jc + jr + c) * ldb];
@@ -226,9 +226,9 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
                     // Pack A block (mc x kc) into column-panels of height mr
                     for (keel::usize ii = 0; ii < mc; ii += mr) {
                         keel::usize cur_mr = keel::min(mr, mc - ii);
-                        double *a_p = A_pack.data() + ii * kc;
+                        keel::f64 *a_p = A_pack.data() + ii * kc;
                         for (keel::usize kk = 0; kk < kc; ++kk) {
-                            const double *a_col = A + (ic + ii) + (pc + kk) * lda;
+                            const keel::f64 *a_col = A + (ic + ii) + (pc + kk) * lda;
                             for (keel::usize r = 0; r < cur_mr; ++r) {
                                 a_p[kk * mr + r] = a_col[r];
                             }
@@ -241,12 +241,12 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
                     // Microkernel loop over jr (width nr) and ir (height mr)
                     for (keel::usize jr = 0; jr < nc; jr += nr) {
                         keel::usize cur_nr = keel::min(nr, nc - jr);
-                        const double *b_p_tile = B_pack.data() + jr * kc;
+                        const keel::f64 *b_p_tile = B_pack.data() + jr * kc;
 
                         for (keel::usize ir = 0; ir < mc; ir += mr) {
                             keel::usize cur_mr = keel::min(mr, mc - ir);
-                            const double *a_p = A_pack.data() + ir * kc;
-                            double *c_ptr = C + (ic + ir) + (jc + jr) * ldc;
+                            const keel::f64 *a_p = A_pack.data() + ir * kc;
+                            keel::f64 *c_ptr = C + (ic + ir) + (jc + jr) * ldc;
 
                             if (cur_mr == mr && cur_nr == nr) {
                                 // Full mr x nr SIMD microkernel (12 accumulator registers)
@@ -257,7 +257,7 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
                                     auto a0 = hn::LoadU(d, a_p + kk * mr + 0 * N);
                                     auto a1 = hn::LoadU(d, a_p + kk * mr + 1 * N);
 
-                                    const double *b_col = b_p_tile + kk * nr;
+                                    const keel::f64 *b_col = b_p_tile + kk * nr;
                                     auto b0 = hn::Set(d, b_col[0]);
                                     auto b1 = hn::Set(d, b_col[1]);
                                     auto b2 = hn::Set(d, b_col[2]);
@@ -278,7 +278,7 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
 
                                 #define STORE_COL(col_idx, acc0, acc1) \
                                 { \
-                                    double *col_c = c_ptr + col_idx * ldc; \
+                                    keel::f64 *col_c = c_ptr + col_idx * ldc; \
                                     auto r0 = hn::Mul(acc0, v_alpha); \
                                     auto r1 = hn::Mul(acc1, v_alpha); \
                                     if (current_beta != 0.0) { \
@@ -299,10 +299,10 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
                             } else {
                                 // Scalar edge kernel for tail tiles
                                 for (keel::usize c = 0; c < cur_nr; ++c) {
-                                    double *col_c = c_ptr + c * ldc;
-                                    const double *b_col = b_p_tile + c;
+                                    keel::f64 *col_c = c_ptr + c * ldc;
+                                    const keel::f64 *b_col = b_p_tile + c;
                                     for (keel::usize r = 0; r < cur_mr; ++r) {
-                                        double acc = 0.0;
+                                        keel::f64 acc = 0.0;
                                         for (keel::usize kk = 0; kk < kc; ++kk) {
                                             acc += a_p[kk * mr + r] * b_col[kk * nr];
                                         }
@@ -346,7 +346,7 @@ if (m == 0 || n == 0) return;
         return;
     }
 
-    const hn::ScalableTag<double> d;
+    const hn::ScalableTag<keel::f64> d;
     const keel::usize N = hn::Lanes(d);
 
     constexpr keel::usize mr_vec = 2;
@@ -358,10 +358,10 @@ if (m == 0 || n == 0) return;
 
     // Zero-allocation stack-based fast path for small complex matrices (m, n, k <= 64)
     if (m <= 64 && n <= 64 && k <= 64) {
-        alignas(64) double Ar_pack[144 * 64 + 64];
-        alignas(64) double Ai_pack[144 * 64 + 64];
-        alignas(64) double Br_pack[144 * 64 + 64];
-        alignas(64) double Bi_pack[144 * 64 + 64];
+        alignas(64) keel::f64 Ar_pack[144 * 64 + 64];
+        alignas(64) keel::f64 Ai_pack[144 * 64 + 64];
+        alignas(64) keel::f64 Br_pack[144 * 64 + 64];
+        alignas(64) keel::f64 Bi_pack[144 * 64 + 64];
 
         const keel::usize mc = m;
         const keel::usize nc = n;
@@ -370,8 +370,8 @@ if (m == 0 || n == 0) return;
         // Pack B real/imag
         for (keel::usize jr = 0; jr < nc; jr += nr) {
             keel::usize cur_nr = keel::min(nr, nc - jr);
-            double *br_p = Br_pack + jr * kc;
-            double *bi_p = Bi_pack + jr * kc;
+            keel::f64 *br_p = Br_pack + jr * kc;
+            keel::f64 *bi_p = Bi_pack + jr * kc;
             for (keel::usize kk = 0; kk < kc; ++kk) {
                 for (keel::usize c = 0; c < cur_nr; ++c) {
                     keel::c64 b_val = B[kk + (jr + c) * ldb];
@@ -388,8 +388,8 @@ if (m == 0 || n == 0) return;
         // Pack A real/imag
         for (keel::usize ii = 0; ii < mc; ii += mr) {
             keel::usize cur_mr = keel::min(mr, mc - ii);
-            double *ar_p = Ar_pack + ii * kc;
-            double *ai_p = Ai_pack + ii * kc;
+            keel::f64 *ar_p = Ar_pack + ii * kc;
+            keel::f64 *ai_p = Ai_pack + ii * kc;
             for (keel::usize kk = 0; kk < kc; ++kk) {
                 const keel::c64 *a_col = A + ii + kk * lda;
                 for (keel::usize r = 0; r < cur_mr; ++r) {
@@ -406,13 +406,13 @@ if (m == 0 || n == 0) return;
         // SIMD 4M Kernel
         for (keel::usize jr = 0; jr < nc; jr += nr) {
             keel::usize cur_nr = keel::min(nr, nc - jr);
-            const double *br_p_tile = Br_pack + jr * kc;
-            const double *bi_p_tile = Bi_pack + jr * kc;
+            const keel::f64 *br_p_tile = Br_pack + jr * kc;
+            const keel::f64 *bi_p_tile = Bi_pack + jr * kc;
 
             for (keel::usize ir = 0; ir < mc; ir += mr) {
                 keel::usize cur_mr = keel::min(mr, mc - ir);
-                const double *ar_p = Ar_pack + ir * kc;
-                const double *ai_p = Ai_pack + ir * kc;
+                const keel::f64 *ar_p = Ar_pack + ir * kc;
+                const keel::f64 *ai_p = Ai_pack + ir * kc;
                 keel::c64 *c_ptr = C + ir + jr * ldc;
 
                 if (cur_mr == mr && cur_nr == nr) {
@@ -427,8 +427,8 @@ if (m == 0 || n == 0) return;
                         auto ai0 = hn::LoadU(d, ai_p + kk * mr + 0 * N);
                         auto ai1 = hn::LoadU(d, ai_p + kk * mr + 1 * N);
 
-                        const double *br_k = br_p_tile + kk * nr;
-                        const double *bi_k = bi_p_tile + kk * nr;
+                        const keel::f64 *br_k = br_p_tile + kk * nr;
+                        const keel::f64 *bi_k = bi_p_tile + kk * nr;
 
                         #define KERNEL_COL_FAST(col_idx, cr_acc0, cr_acc1, ci_acc0, ci_acc1) \
                         { \
@@ -467,7 +467,7 @@ if (m == 0 || n == 0) return;
                         yi0 = hn::MulAdd(ci0, v_alpha_r, yi0); \
                         auto yi1 = hn::Mul(cr1, v_alpha_i); \
                         yi1 = hn::MulAdd(ci1, v_alpha_r, yi1); \
-                        alignas(64) double buf_r0[16], buf_r1[16], buf_i0[16], buf_i1[16]; \
+                        alignas(64) keel::f64 buf_r0[16], buf_r1[16], buf_i0[16], buf_i1[16]; \
                         hn::StoreU(yr0, d, buf_r0); \
                         hn::StoreU(yr1, d, buf_r1); \
                         hn::StoreU(yi0, d, buf_i0); \
@@ -498,8 +498,8 @@ if (m == 0 || n == 0) return;
                 } else {
                     for (keel::usize c = 0; c < cur_nr; ++c) {
                         keel::c64 *col_c = c_ptr + c * ldc;
-                        const double *br_col = br_p_tile + c;
-                        const double *bi_col = bi_p_tile + c;
+                        const keel::f64 *br_col = br_p_tile + c;
+                        const keel::f64 *bi_col = bi_p_tile + c;
                         for (keel::usize r = 0; r < cur_mr; ++r) {
                             keel::c64 acc(0.0, 0.0);
                             for (keel::usize kk = 0; kk < kc; ++kk) {
@@ -530,17 +530,17 @@ if (m == 0 || n == 0) return;
     keel::linalg::linalg_detail::parallel_for(n, p_thresh, [=](keel::usize jc_start, keel::usize jc_end) {
         const keel::usize mc_padded = ((mc_block + mr - 1) / mr) * mr;
         constexpr keel::usize nc_padded = ((nc_block + nr - 1) / nr) * nr;
-        thread_local static keel::Array<double> Ar_pack(mc_padded * kc_block + 64, 0.0, nullptr);
-        thread_local static keel::Array<double> Ai_pack(mc_padded * kc_block + 64, 0.0, nullptr);
-        thread_local static keel::Array<double> Br_pack(kc_block * nc_padded + 64, 0.0, nullptr);
-        thread_local static keel::Array<double> Bi_pack(kc_block * nc_padded + 64, 0.0, nullptr);
+        thread_local static keel::Array<keel::f64> Ar_pack(mc_padded * kc_block + 64, 0.0, nullptr);
+        thread_local static keel::Array<keel::f64> Ai_pack(mc_padded * kc_block + 64, 0.0, nullptr);
+        thread_local static keel::Array<keel::f64> Br_pack(kc_block * nc_padded + 64, 0.0, nullptr);
+        thread_local static keel::Array<keel::f64> Bi_pack(kc_block * nc_padded + 64, 0.0, nullptr);
         if (Ar_pack.size() < mc_padded * kc_block + 64) {
-            Ar_pack = keel::Array<double>(mc_padded * kc_block + 64, 0.0, nullptr);
-            Ai_pack = keel::Array<double>(mc_padded * kc_block + 64, 0.0, nullptr);
+            Ar_pack = keel::Array<keel::f64>(mc_padded * kc_block + 64, 0.0, nullptr);
+            Ai_pack = keel::Array<keel::f64>(mc_padded * kc_block + 64, 0.0, nullptr);
         }
         if (Br_pack.size() < kc_block * nc_padded + 64) {
-            Br_pack = keel::Array<double>(kc_block * nc_padded + 64, 0.0, nullptr);
-            Bi_pack = keel::Array<double>(kc_block * nc_padded + 64, 0.0, nullptr);
+            Br_pack = keel::Array<keel::f64>(kc_block * nc_padded + 64, 0.0, nullptr);
+            Bi_pack = keel::Array<keel::f64>(kc_block * nc_padded + 64, 0.0, nullptr);
         }
 
         for (keel::usize jc = jc_start; jc < jc_end; jc += nc_block) {
@@ -553,8 +553,8 @@ if (m == 0 || n == 0) return;
                 // Pack B real and imaginary blocks ONCE per (jc, pc) tile
                 for (keel::usize jr = 0; jr < nc; jr += nr) {
                     keel::usize cur_nr = keel::min(nr, nc - jr);
-                    double *br_p = Br_pack.data() + jr * kc;
-                    double *bi_p = Bi_pack.data() + jr * kc;
+                    keel::f64 *br_p = Br_pack.data() + jr * kc;
+                    keel::f64 *bi_p = Bi_pack.data() + jr * kc;
                     for (keel::usize kk = 0; kk < kc; ++kk) {
                         for (keel::usize c = 0; c < cur_nr; ++c) {
                             keel::c64 b_val = B[(pc + kk) + (jc + jr + c) * ldb];
@@ -574,8 +574,8 @@ if (m == 0 || n == 0) return;
                     // Pack A real and imaginary blocks ONCE per tile
                     for (keel::usize ii = 0; ii < mc; ii += mr) {
                         keel::usize cur_mr = keel::min(mr, mc - ii);
-                        double *ar_p = Ar_pack.data() + ii * kc;
-                        double *ai_p = Ai_pack.data() + ii * kc;
+                        keel::f64 *ar_p = Ar_pack.data() + ii * kc;
+                        keel::f64 *ai_p = Ai_pack.data() + ii * kc;
                         for (keel::usize kk = 0; kk < kc; ++kk) {
                             const keel::c64 *a_col = A + (ic + ii) + (pc + kk) * lda;
                             for (keel::usize r = 0; r < cur_mr; ++r) {
@@ -591,13 +591,13 @@ if (m == 0 || n == 0) return;
 
                     for (keel::usize jr = 0; jr < nc; jr += nr) {
                         keel::usize cur_nr = keel::min(nr, nc - jr);
-                        const double *br_p_tile = Br_pack.data() + jr * kc;
-                        const double *bi_p_tile = Bi_pack.data() + jr * kc;
+                        const keel::f64 *br_p_tile = Br_pack.data() + jr * kc;
+                        const keel::f64 *bi_p_tile = Bi_pack.data() + jr * kc;
 
                         for (keel::usize ir = 0; ir < mc; ir += mr) {
                             keel::usize cur_mr = keel::min(mr, mc - ir);
-                            const double *ar_p = Ar_pack.data() + ir * kc;
-                            const double *ai_p = Ai_pack.data() + ir * kc;
+                            const keel::f64 *ar_p = Ar_pack.data() + ir * kc;
+                            const keel::f64 *ai_p = Ai_pack.data() + ir * kc;
                             keel::c64 *c_ptr = C + (ic + ir) + (jc + jr) * ldc;
 
                             if (cur_mr == mr && cur_nr == nr) {
@@ -613,8 +613,8 @@ if (m == 0 || n == 0) return;
                                     auto ai0 = hn::LoadU(d, ai_p + kk * mr + 0 * N);
                                     auto ai1 = hn::LoadU(d, ai_p + kk * mr + 1 * N);
 
-                                    const double *br_k = br_p_tile + kk * nr;
-                                    const double *bi_k = bi_p_tile + kk * nr;
+                                    const keel::f64 *br_k = br_p_tile + kk * nr;
+                                    const keel::f64 *bi_k = bi_p_tile + kk * nr;
 
                                     #define KERNEL_COL(col_idx, cr_acc0, cr_acc1, ci_acc0, ci_acc1) \
                                     { \
@@ -655,7 +655,7 @@ if (m == 0 || n == 0) return;
                                     yi0 = hn::MulAdd(ci0, v_alpha_r, yi0); \
                                     auto yi1 = hn::Mul(cr1, v_alpha_i); \
                                     yi1 = hn::MulAdd(ci1, v_alpha_r, yi1); \
-                                    alignas(64) double buf_r0[16], buf_r1[16], buf_i0[16], buf_i1[16]; \
+                                    alignas(64) keel::f64 buf_r0[16], buf_r1[16], buf_i0[16], buf_i1[16]; \
                                     hn::StoreU(yr0, d, buf_r0); \
                                     hn::StoreU(yr1, d, buf_r1); \
                                     hn::StoreU(yi0, d, buf_i0); \
@@ -687,8 +687,8 @@ if (m == 0 || n == 0) return;
                                 // Tail scalar edge kernel
                                 for (keel::usize c = 0; c < cur_nr; ++c) {
                                     keel::c64 *col_c = c_ptr + c * ldc;
-                                    const double *br_col = br_p_tile + c;
-                                    const double *bi_col = bi_p_tile + c;
+                                    const keel::f64 *br_col = br_p_tile + c;
+                                    const keel::f64 *bi_col = bi_p_tile + c;
                                     for (keel::usize r = 0; r < cur_mr; ++r) {
                                         keel::c64 acc(0.0, 0.0);
                                         for (keel::usize kk = 0; kk < kc; ++kk) {
@@ -714,15 +714,15 @@ if (m == 0 || n == 0) return;
 
 
 
-bool LuPanelDoubleKernel(double *A, keel::usize lda, keel::i32 *piv, keel::usize m, keel::usize n, keel::usize offset_row)
+bool LuPanelDoubleKernel(keel::f64 *A, keel::usize lda, keel::i32 *piv, keel::usize m, keel::usize n, keel::usize offset_row)
 {
-    const hn::ScalableTag<double> d;
+    const hn::ScalableTag<keel::f64> d;
     const keel::usize N = hn::Lanes(d);
 
     for (keel::usize j = 0; j < n; ++j) {
         keel::usize pivot = j;
-        double pmax = keel::abs(A[j + j * lda]);
-        const double *c_ptr = A + j * lda;
+        keel::f64 pmax = keel::abs(A[j + j * lda]);
+        const keel::f64 *c_ptr = A + j * lda;
         const keel::usize rem_piv = m - (j + 1);
 
         if (rem_piv >= N) {
@@ -732,10 +732,10 @@ bool LuPanelDoubleKernel(double *A, keel::usize lda, keel::i32 *piv, keel::usize
                 auto v_val = hn::Abs(hn::LoadU(d, c_ptr + i));
                 v_max = hn::Max(v_max, v_val);
             }
-            const double vec_pmax = hn::ReduceMax(d, v_max);
+            const keel::f64 vec_pmax = hn::ReduceMax(d, v_max);
             if (vec_pmax > pmax) {
                 for (keel::usize k = j + 1; k < m; ++k) {
-                    const double v = keel::abs(c_ptr[k]);
+                    const keel::f64 v = keel::abs(c_ptr[k]);
                     if (v > pmax) {
                         pmax = v;
                         pivot = k;
@@ -743,7 +743,7 @@ bool LuPanelDoubleKernel(double *A, keel::usize lda, keel::i32 *piv, keel::usize
                 }
             } else {
                 for (; i < m; ++i) {
-                    const double v = keel::abs(c_ptr[i]);
+                    const keel::f64 v = keel::abs(c_ptr[i]);
                     if (v > pmax) {
                         pmax = v;
                         pivot = i;
@@ -752,7 +752,7 @@ bool LuPanelDoubleKernel(double *A, keel::usize lda, keel::i32 *piv, keel::usize
             }
         } else {
             for (keel::usize i = j + 1; i < m; ++i) {
-                const double v = keel::abs(c_ptr[i]);
+                const keel::f64 v = keel::abs(c_ptr[i]);
                 if (v > pmax) { pmax = v; pivot = i; }
             }
         }
@@ -760,25 +760,25 @@ bool LuPanelDoubleKernel(double *A, keel::usize lda, keel::i32 *piv, keel::usize
         if (pmax == 0.0) return false;
         piv[j] = as<keel::i32>(pivot + offset_row);
         if (pivot != j) {
-            double *r1 = A + j;
-            double *r2 = A + pivot;
+            keel::f64 *r1 = A + j;
+            keel::f64 *r2 = A + pivot;
             keel::usize col = 0;
             for (; col + 8 <= n; col += 8) {
-                double t0 = r1[(col + 0) * lda]; r1[(col + 0) * lda] = r2[(col + 0) * lda]; r2[(col + 0) * lda] = t0;
-                double t1 = r1[(col + 1) * lda]; r1[(col + 1) * lda] = r2[(col + 1) * lda]; r2[(col + 1) * lda] = t1;
-                double t2 = r1[(col + 2) * lda]; r1[(col + 2) * lda] = r2[(col + 2) * lda]; r2[(col + 2) * lda] = t2;
-                double t3 = r1[(col + 3) * lda]; r1[(col + 3) * lda] = r2[(col + 3) * lda]; r2[(col + 3) * lda] = t3;
-                double t4 = r1[(col + 4) * lda]; r1[(col + 4) * lda] = r2[(col + 4) * lda]; r2[(col + 4) * lda] = t4;
-                double t5 = r1[(col + 5) * lda]; r1[(col + 5) * lda] = r2[(col + 5) * lda]; r2[(col + 5) * lda] = t5;
-                double t6 = r1[(col + 6) * lda]; r1[(col + 6) * lda] = r2[(col + 6) * lda]; r2[(col + 6) * lda] = t6;
-                double t7 = r1[(col + 7) * lda]; r1[(col + 7) * lda] = r2[(col + 7) * lda]; r2[(col + 7) * lda] = t7;
+                keel::f64 t0 = r1[(col + 0) * lda]; r1[(col + 0) * lda] = r2[(col + 0) * lda]; r2[(col + 0) * lda] = t0;
+                keel::f64 t1 = r1[(col + 1) * lda]; r1[(col + 1) * lda] = r2[(col + 1) * lda]; r2[(col + 1) * lda] = t1;
+                keel::f64 t2 = r1[(col + 2) * lda]; r1[(col + 2) * lda] = r2[(col + 2) * lda]; r2[(col + 2) * lda] = t2;
+                keel::f64 t3 = r1[(col + 3) * lda]; r1[(col + 3) * lda] = r2[(col + 3) * lda]; r2[(col + 3) * lda] = t3;
+                keel::f64 t4 = r1[(col + 4) * lda]; r1[(col + 4) * lda] = r2[(col + 4) * lda]; r2[(col + 4) * lda] = t4;
+                keel::f64 t5 = r1[(col + 5) * lda]; r1[(col + 5) * lda] = r2[(col + 5) * lda]; r2[(col + 5) * lda] = t5;
+                keel::f64 t6 = r1[(col + 6) * lda]; r1[(col + 6) * lda] = r2[(col + 6) * lda]; r2[(col + 6) * lda] = t6;
+                keel::f64 t7 = r1[(col + 7) * lda]; r1[(col + 7) * lda] = r2[(col + 7) * lda]; r2[(col + 7) * lda] = t7;
             }
             for (; col < n; ++col) {
-                double t = r1[col * lda]; r1[col * lda] = r2[col * lda]; r2[col * lda] = t;
+                keel::f64 t = r1[col * lda]; r1[col * lda] = r2[col * lda]; r2[col * lda] = t;
             }
         }
-        const double inv_pivot = 1.0 / A[j + j * lda];
-        double *scale_ptr = A + j * lda + (j + 1);
+        const keel::f64 inv_pivot = 1.0 / A[j + j * lda];
+        keel::f64 *scale_ptr = A + j * lda + (j + 1);
         const keel::usize rem_scale = m - (j + 1);
         auto v_inv = hn::Set(d, inv_pivot);
         keel::usize si = 0;
@@ -789,21 +789,21 @@ bool LuPanelDoubleKernel(double *A, keel::usize lda, keel::i32 *piv, keel::usize
             scale_ptr[si] *= inv_pivot;
         }
 
-        const double *l_col = A + j * lda;
+        const keel::f64 *l_col = A + j * lda;
         const keel::usize rem_m = m - (j + 1);
 
         keel::usize col = j + 1;
         for (; col + 4 <= n; col += 4) {
-            const double f0 = A[j + (col + 0) * lda];
-            const double f1 = A[j + (col + 1) * lda];
-            const double f2 = A[j + (col + 2) * lda];
-            const double f3 = A[j + (col + 3) * lda];
+            const keel::f64 f0 = A[j + (col + 0) * lda];
+            const keel::f64 f1 = A[j + (col + 1) * lda];
+            const keel::f64 f2 = A[j + (col + 2) * lda];
+            const keel::f64 f3 = A[j + (col + 3) * lda];
 
-            double *c0 = A + (col + 0) * lda + (j + 1);
-            double *c1 = A + (col + 1) * lda + (j + 1);
-            double *c2 = A + (col + 2) * lda + (j + 1);
-            double *c3 = A + (col + 3) * lda + (j + 1);
-            const double *x_ptr = l_col + (j + 1);
+            keel::f64 *c0 = A + (col + 0) * lda + (j + 1);
+            keel::f64 *c1 = A + (col + 1) * lda + (j + 1);
+            keel::f64 *c2 = A + (col + 2) * lda + (j + 1);
+            keel::f64 *c3 = A + (col + 3) * lda + (j + 1);
+            const keel::f64 *x_ptr = l_col + (j + 1);
 
             if (rem_m > 0) {
                 auto v_nf0 = hn::Set(d, -f0);
@@ -820,7 +820,7 @@ bool LuPanelDoubleKernel(double *A, keel::usize lda, keel::i32 *piv, keel::usize
                     hn::StoreU(hn::MulAdd(v_x, v_nf3, hn::LoadU(d, c3 + idx)), d, c3 + idx);
                 }
                 for (; idx < rem_m; ++idx) {
-                    const double vx = x_ptr[idx];
+                    const keel::f64 vx = x_ptr[idx];
                     c0[idx] += vx * (-f0);
                     c1[idx] += vx * (-f1);
                     c2[idx] += vx * (-f2);
@@ -829,13 +829,13 @@ bool LuPanelDoubleKernel(double *A, keel::usize lda, keel::i32 *piv, keel::usize
             }
         }
         for (; col < n; ++col) {
-            const double f = A[j + col * lda];
+            const keel::f64 f = A[j + col * lda];
             if (f == 0.0) continue;
-            double *col_ptr = A + col * lda;
+            keel::f64 *col_ptr = A + col * lda;
 
             if (rem_m > 0) {
-                const double *x_ptr = l_col + (j + 1);
-                double *y_ptr = col_ptr + (j + 1);
+                const keel::f64 *x_ptr = l_col + (j + 1);
+                keel::f64 *y_ptr = col_ptr + (j + 1);
                 auto v_neg_f = hn::Set(d, -f);
 
                 keel::usize idx = 0;
@@ -854,17 +854,17 @@ bool LuPanelDoubleKernel(double *A, keel::usize lda, keel::i32 *piv, keel::usize
 
 bool LuPanelComplexKernel(keel::c64 *A_cplx, keel::usize lda, keel::i32 *piv, keel::usize m, keel::usize n, keel::usize offset_row)
 {
-    const hn::ScalableTag<double> d;
+    const hn::ScalableTag<keel::f64> d;
     const keel::usize N = hn::Lanes(d);
-    double *A = reinterpret_cast<double*>(A_cplx);
+    keel::f64 *A = reinterpret_cast<keel::f64*>(A_cplx);
 
     for (keel::usize j = 0; j < n; ++j) {
         keel::usize pivot = j;
-        double pmax = keel::norm(A_cplx[j + j * lda]);
+        keel::f64 pmax = keel::norm(A_cplx[j + j * lda]);
         
         // Pivot search (scalar is sufficient for complex magnitude since it's O(m))
         for (keel::usize i = j + 1; i < m; ++i) {
-            double v = keel::norm(A_cplx[i + j * lda]);
+            keel::f64 v = keel::norm(A_cplx[i + j * lda]);
             if (v > pmax) { pmax = v; pivot = i; }
         }
 
@@ -891,7 +891,7 @@ bool LuPanelComplexKernel(keel::c64 *A_cplx, keel::usize lda, keel::i32 *piv, ke
             A_cplx[i + j * lda] *= inv_pivot;
         }
 
-        const double *l_col = A + 2 * j * lda;
+        const keel::f64 *l_col = A + 2 * j * lda;
         const keel::usize rem_m = m - (j + 1);
         
         keel::usize col = j + 1;
@@ -899,9 +899,9 @@ bool LuPanelComplexKernel(keel::c64 *A_cplx, keel::usize lda, keel::i32 *piv, ke
             const keel::c64 f0 = A_cplx[j + (col + 0) * lda];
             const keel::c64 f1 = A_cplx[j + (col + 1) * lda];
             
-            double *c0 = A + 2 * (col + 0) * lda + 2 * (j + 1);
-            double *c1 = A + 2 * (col + 1) * lda + 2 * (j + 1);
-            const double *x_ptr = l_col + 2 * (j + 1);
+            keel::f64 *c0 = A + 2 * (col + 0) * lda + 2 * (j + 1);
+            keel::f64 *c1 = A + 2 * (col + 1) * lda + 2 * (j + 1);
+            const keel::f64 *x_ptr = l_col + 2 * (j + 1);
 
             if (rem_m > 0) {
                 auto v_fr0 = hn::Set(d, f0.real());
@@ -936,8 +936,8 @@ bool LuPanelComplexKernel(keel::c64 *A_cplx, keel::usize lda, keel::i32 *piv, ke
             const keel::c64 f = A_cplx[j + col * lda];
             if (f.real() == 0.0 && f.imag() == 0.0) continue;
             
-            double *c_col = A + 2 * col * lda + 2 * (j + 1);
-            const double *x_ptr = l_col + 2 * (j + 1);
+            keel::f64 *c_col = A + 2 * col * lda + 2 * (j + 1);
+            const keel::f64 *x_ptr = l_col + 2 * (j + 1);
             
             if (rem_m > 0) {
                 auto v_fr = hn::Set(d, f.real());
@@ -977,7 +977,7 @@ HWY_EXPORT(GemmComplexKernel);
 HWY_EXPORT(LuPanelDoubleKernel);
 HWY_EXPORT(LuPanelComplexKernel);
 
-bool lu_panel(double *A, keel::usize lda, keel::i32 *piv, keel::usize m, keel::usize n, keel::usize offset_row) noexcept
+bool lu_panel(keel::f64 *A, keel::usize lda, keel::i32 *piv, keel::usize m, keel::usize n, keel::usize offset_row) noexcept
 {
     return HWY_DYNAMIC_DISPATCH(LuPanelDoubleKernel)(A, lda, piv, m, n, offset_row);
 }
@@ -989,15 +989,15 @@ bool lu_panel(keel::c64 *A, keel::usize lda, keel::i32 *piv, keel::usize m, keel
 
 void gemm(MatrixTranspose transa, MatrixTranspose transb,
           keel::usize m, keel::usize n, keel::usize k,
-          double alpha, const double *A, keel::usize lda,
-          const double *B, keel::usize ldb,
-          double beta, double *C, keel::usize ldc) noexcept
+          keel::f64 alpha, const keel::f64 *A, keel::usize lda,
+          const keel::f64 *B, keel::usize ldb,
+          keel::f64 beta, keel::f64 *C, keel::usize ldc) noexcept
 {
     if (m == 0 || n == 0)
         return;
-    const double *A_eff = A;
+    const keel::f64 *A_eff = A;
     keel::usize lda_eff = lda;
-    keel::Array<double> A_trans;
+    keel::Array<keel::f64> A_trans;
     if (transa != MatrixTranspose::NoTrans && k > 0 && alpha != 0.0) {
         A_trans.resize(m * k);
         for (keel::usize p = 0; p < k; ++p)
@@ -1007,9 +1007,9 @@ void gemm(MatrixTranspose transa, MatrixTranspose transb,
         lda_eff = m;
     }
 
-    const double *B_eff = B;
+    const keel::f64 *B_eff = B;
     keel::usize ldb_eff = ldb;
-    keel::Array<double> B_trans;
+    keel::Array<keel::f64> B_trans;
     if (transb != MatrixTranspose::NoTrans && k > 0 && alpha != 0.0) {
         B_trans.resize(k * n);
         for (keel::usize j = 0; j < n; ++j)
@@ -1075,11 +1075,11 @@ void gemm_dispatch(keel::usize m, keel::usize n, keel::usize k,
     if constexpr (is_complex_type_v<T>) {
         gemm(MatrixTranspose::NoTrans, MatrixTranspose::NoTrans, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
     } else {
-        gemm(MatrixTranspose::NoTrans, MatrixTranspose::NoTrans, m, n, k, as<double>(alpha),
-             reinterpret_cast<const double*>(A), lda,
-             reinterpret_cast<const double*>(B), ldb,
-             as<double>(beta),
-             reinterpret_cast<double*>(C), ldc);
+        gemm(MatrixTranspose::NoTrans, MatrixTranspose::NoTrans, m, n, k, as<keel::f64>(alpha),
+             reinterpret_cast<const keel::f64*>(A), lda,
+             reinterpret_cast<const keel::f64*>(B), ldb,
+             as<keel::f64>(beta),
+             reinterpret_cast<keel::f64*>(C), ldc);
     }
 }
 
@@ -1391,8 +1391,8 @@ void syrk_generic(MatrixUplo uplo, MatrixTranspose trans,
 
 void trsm(MatrixSide side, MatrixUplo uplo, MatrixTranspose trans, MatrixDiag diag,
           keel::usize m, keel::usize n,
-          double alpha, const double *A, keel::usize lda,
-          double *B, keel::usize ldb) noexcept
+          keel::f64 alpha, const keel::f64 *A, keel::usize lda,
+          keel::f64 *B, keel::usize ldb) noexcept
 {
     trsm_generic(side, uplo, trans, diag, m, n, alpha, A, lda, B, ldb);
 }
@@ -1407,8 +1407,8 @@ void trsm(MatrixSide side, MatrixUplo uplo, MatrixTranspose trans, MatrixDiag di
 
 void syrk(MatrixUplo uplo, MatrixTranspose trans,
           keel::usize n, keel::usize k,
-          double alpha, const double *A, keel::usize lda,
-          double beta, double *C, keel::usize ldc) noexcept
+          keel::f64 alpha, const keel::f64 *A, keel::usize lda,
+          keel::f64 beta, keel::f64 *C, keel::usize ldc) noexcept
 {
     syrk_generic(uplo, trans, n, k, alpha, A, lda, beta, C, ldc);
 }

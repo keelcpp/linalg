@@ -429,9 +429,9 @@ void syrk_generic(MatrixUplo uplo, MatrixTranspose trans,
 }
 
 void gemm(MatrixTranspose transa, MatrixTranspose transb, keel::usize m, keel::usize n, keel::usize k,
-          double alpha, const double *A, keel::usize lda,
-          const double *B, keel::usize ldb,
-          double beta, double *C, keel::usize ldc) noexcept
+          f64 alpha, const f64 *A, keel::usize lda,
+          const f64 *B, keel::usize ldb,
+          f64 beta, f64 *C, keel::usize ldc) noexcept
 {
     gemm_portable(transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
 }
@@ -446,8 +446,8 @@ void gemm(MatrixTranspose transa, MatrixTranspose transb, keel::usize m, keel::u
 
 void trsm(MatrixSide side, MatrixUplo uplo, MatrixTranspose trans, MatrixDiag diag,
           keel::usize m, keel::usize n,
-          double alpha, const double *A, keel::usize lda,
-          double *B, keel::usize ldb) noexcept
+          f64 alpha, const f64 *A, keel::usize lda,
+          f64 *B, keel::usize ldb) noexcept
 {
     trsm_generic(side, uplo, trans, diag, m, n, alpha, A, lda, B, ldb);
 }
@@ -462,8 +462,8 @@ void trsm(MatrixSide side, MatrixUplo uplo, MatrixTranspose trans, MatrixDiag di
 
 void syrk(MatrixUplo uplo, MatrixTranspose trans,
           keel::usize n, keel::usize k,
-          double alpha, const double *A, keel::usize lda,
-          double beta, double *C, keel::usize ldc) noexcept
+          f64 alpha, const f64 *A, keel::usize lda,
+          f64 beta, f64 *C, keel::usize ldc) noexcept
 {
     syrk_generic(uplo, trans, n, k, alpha, A, lda, beta, C, ldc);
 }
@@ -480,10 +480,10 @@ bool lu_panel(keel::c64 *A, keel::usize lda, keel::i32 *piv, keel::usize m, keel
 {
 for (keel::usize j = 0; j < n; ++j) {
         keel::usize pivot = j;
-        double pmax = keel::norm(A[j + j * lda]);
+        f64 pmax = keel::norm(A[j + j * lda]);
         
         for (keel::usize i = j + 1; i < m; ++i) {
-            double v = keel::norm(A[i + j * lda]);
+            f64 v = keel::norm(A[i + j * lda]);
             if (v > pmax) { pmax = v; pivot = i; }
         }
 
@@ -522,14 +522,14 @@ for (keel::usize j = 0; j < n; ++j) {
     return true;
 }
 
-bool lu_panel(double *A, keel::usize lda, keel::i32 *piv, keel::usize m, keel::usize n, keel::usize offset_row) noexcept
+bool lu_panel(f64 *A, keel::usize lda, keel::i32 *piv, keel::usize m, keel::usize n, keel::usize offset_row) noexcept
 {
     for (keel::usize j = 0; j < n; ++j) {
         keel::usize pivot = j;
-        double pmax = keel::abs(A[j + j * lda]);
+        f64 pmax = keel::abs(A[j + j * lda]);
         
         for (keel::usize i = j + 1; i < m; ++i) {
-            double v = keel::abs(A[i + j * lda]);
+            f64 v = keel::abs(A[i + j * lda]);
             if (v > pmax) {
                 pmax = v;
                 pivot = i;
@@ -546,10 +546,10 @@ bool lu_panel(double *A, keel::usize lda, keel::i32 *piv, keel::usize m, keel::u
             }
         }
         
-        double inv_pivot = 1.0 / A[j + j * lda];
+        f64 inv_pivot = 1.0 / A[j + j * lda];
         for (keel::usize i = j + 1; i < m; ++i) {
             A[i + j * lda] *= inv_pivot;
-            double f = A[i + j * lda];
+            f64 f = A[i + j * lda];
             for (keel::usize col = j + 1; col < n; ++col) {
                 A[i + col * lda] -= f * A[j + col * lda];
             }

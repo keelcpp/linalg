@@ -22,13 +22,13 @@ template <typename T>
 constexpr bool is_complex_v<keel::Complex<T>> = true;
 
 template <typename T>
-inline double abs_val(const T &x) {
+inline f64 abs_val(const T &x) {
     if constexpr (is_complex_v<T>) return keel::abs(x);
     else return keel::abs(x);
 }
 
 template <typename T>
-inline double abs_sq(const T &x) {
+inline f64 abs_sq(const T &x) {
     if constexpr (is_complex_v<T>) return keel::norm(x);
     else return x * x;
 }
@@ -47,8 +47,8 @@ bool lu_recursive_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, 
 
     const keel::usize base_n = (m >= 256) ? 32 : 128;
     if (n <= base_n) {
-        if constexpr (keel::IsSame<T, double>) {
-            return keel::linalg::lu_panel(reinterpret_cast<double*>(A), lda, piv, m, n, offset_row);
+        if constexpr (keel::IsSame<T, f64>) {
+            return keel::linalg::lu_panel(reinterpret_cast<f64*>(A), lda, piv, m, n, offset_row);
         } else {
             return keel::linalg::lu_panel(reinterpret_cast<keel::c64*>(A), lda, piv, m, n, offset_row);
         }
@@ -85,7 +85,7 @@ bool lu_recursive_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, 
                            reinterpret_cast<keel::c64*>(A12), lda);
     } else {
         keel::linalg::trsm(MatrixSide::Left, MatrixUplo::Lower, MatrixTranspose::NoTrans, MatrixDiag::Unit,
-                           n1, n2, 1.0, reinterpret_cast<double*>(L11), lda, reinterpret_cast<double*>(A12), lda);
+                           n1, n2, 1.0, reinterpret_cast<f64*>(L11), lda, reinterpret_cast<f64*>(A12), lda);
     }
 
     // 4. Trailing matrix GEMM update: A22 -= L21 * U12 ((m - n1) x n2)
@@ -102,10 +102,10 @@ bool lu_recursive_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, 
                            reinterpret_cast<keel::c64*>(A22), lda);
     } else {
         keel::linalg::gemm(MatrixTranspose::NoTrans, MatrixTranspose::NoTrans, rem_rows, n2, n1, -1.0,
-                           reinterpret_cast<const double*>(L21), lda,
-                           reinterpret_cast<const double*>(U12), lda,
+                           reinterpret_cast<const f64*>(L21), lda,
+                           reinterpret_cast<const f64*>(U12), lda,
                            1.0,
-                           reinterpret_cast<double*>(A22), lda);
+                           reinterpret_cast<f64*>(A22), lda);
     }
 
     // 5. Recursive LU on right submatrix A22 ((m - n1) x n2)
@@ -141,18 +141,18 @@ bool qr_solve_house(T *A, keel::usize m, keel::usize n, T *B, keel::usize nrhs, 
     keel::Array<T> v(m, mr);
 
     for (keel::usize k = 0; k < n; ++k) {
-        double norm_sq = 0.0;
+        f64 norm_sq = 0.0;
         for (keel::usize i = k; i < m; ++i) {
             norm_sq += abs_sq(A[i + k * m]);
         }
         if (norm_sq == 0.0) return false;
 
         const T xk = A[k + k * m];
-        const double norm = keel::sqrt(norm_sq);
+        const f64 norm = keel::sqrt(norm_sq);
 
         T alpha;
         if constexpr (is_complex_v<T>) {
-            double ax = keel::abs(xk);
+            f64 ax = keel::abs(xk);
             T phase = (ax > 0.0) ? (xk / ax) : T(1.0, 0.0);
             alpha = -phase * norm;
         } else {
@@ -162,13 +162,13 @@ bool qr_solve_house(T *A, keel::usize m, keel::usize n, T *B, keel::usize nrhs, 
         v[k] = xk - alpha;
         for (keel::usize i = k + 1; i < m; ++i) v[i] = A[i + k * m];
 
-        double v_norm_sq = abs_sq(v[k]);
+        f64 v_norm_sq = abs_sq(v[k]);
         for (keel::usize i = k + 1; i < m; ++i) v_norm_sq += abs_sq(v[i]);
         if (v_norm_sq == 0.0) {
             A[k + k * m] = alpha;
             continue;
         }
-        const double tau = 2.0 / v_norm_sq;
+        const f64 tau = 2.0 / v_norm_sq;
 
         for (keel::usize j = k + 1; j < n; ++j) {
             T dot(0);
@@ -214,7 +214,7 @@ bool la_solve_small_fastpath(const T *A, keel::usize lda,
         keel::mem_copy(X + col * ldx, B + col * ldb, n * sizeof(T));
     }
 
-    if constexpr (keel::IsSame<T, double>) {
+    if constexpr (keel::IsSame<T, f64>) {
         if (!keel::linalg::lu_panel(LU_stack, n, piv_stack, n, n, 0)) return false;
     } else {
         if (!lu_recursive_inplace(LU_stack, n, piv_stack, n, n, 0)) return false;
@@ -232,32 +232,32 @@ bool la_solve_small_fastpath(const T *A, keel::usize lda,
     }
 
     keel::usize j = 0;
-    if constexpr (keel::IsSame<T, double>) {
+    if constexpr (keel::IsSame<T, f64>) {
         // Unroll RHS by 4 to minimize L1 bandwidth and maximize ILP
         for (; j + 3 < nrhs; j += 4) {
-            double *x_col0 = reinterpret_cast<double*>(X + (j + 0) * ldx);
-            double *x_col1 = reinterpret_cast<double*>(X + (j + 1) * ldx);
-            double *x_col2 = reinterpret_cast<double*>(X + (j + 2) * ldx);
-            double *x_col3 = reinterpret_cast<double*>(X + (j + 3) * ldx);
+            f64 *x_col0 = reinterpret_cast<f64*>(X + (j + 0) * ldx);
+            f64 *x_col1 = reinterpret_cast<f64*>(X + (j + 1) * ldx);
+            f64 *x_col2 = reinterpret_cast<f64*>(X + (j + 2) * ldx);
+            f64 *x_col3 = reinterpret_cast<f64*>(X + (j + 3) * ldx);
             
             // Forward substitution
             for (keel::usize k = 0; k < n; ++k) {
-                const double x0 = x_col0[k];
-                const double x1 = x_col1[k];
-                const double x2 = x_col2[k];
-                const double x3 = x_col3[k];
+                const f64 x0 = x_col0[k];
+                const f64 x1 = x_col1[k];
+                const f64 x2 = x_col2[k];
+                const f64 x3 = x_col3[k];
                 if (x0 == 0.0 && x1 == 0.0 && x2 == 0.0 && x3 == 0.0) continue;
                 
-                const double *l_col = reinterpret_cast<const double*>(LU_stack) + k * n;
-                double *y0 = x_col0; double *y1 = x_col1; double *y2 = x_col2; double *y3 = x_col3;
-                const double n0 = -x0; const double n1 = -x1; const double n2 = -x2; const double n3 = -x3;
+                const f64 *l_col = reinterpret_cast<const f64*>(LU_stack) + k * n;
+                f64 *y0 = x_col0; f64 *y1 = x_col1; f64 *y2 = x_col2; f64 *y3 = x_col3;
+                const f64 n0 = -x0; const f64 n1 = -x1; const f64 n2 = -x2; const f64 n3 = -x3;
                 
                 keel::usize i = k + 1;
                 for (; i + 3 < n; i += 4) {
-                    const double u0 = l_col[i + 0];
-                    const double u1 = l_col[i + 1];
-                    const double u2 = l_col[i + 2];
-                    const double u3 = l_col[i + 3];
+                    const f64 u0 = l_col[i + 0];
+                    const f64 u1 = l_col[i + 1];
+                    const f64 u2 = l_col[i + 2];
+                    const f64 u3 = l_col[i + 3];
 
                     y0[i+0] += u0 * n0; y0[i+1] += u1 * n0; y0[i+2] += u2 * n0; y0[i+3] += u3 * n0;
                     y1[i+0] += u0 * n1; y1[i+1] += u1 * n1; y1[i+2] += u2 * n1; y1[i+3] += u3 * n1;
@@ -265,7 +265,7 @@ bool la_solve_small_fastpath(const T *A, keel::usize lda,
                     y3[i+0] += u0 * n3; y3[i+1] += u1 * n3; y3[i+2] += u2 * n3; y3[i+3] += u3 * n3;
                 }
                 for (; i < n; ++i) {
-                    const double u = l_col[i];
+                    const f64 u = l_col[i];
                     y0[i] += u * n0; y1[i] += u * n1; y2[i] += u * n2; y3[i] += u * n3;
                 }
             }
@@ -273,24 +273,24 @@ bool la_solve_small_fastpath(const T *A, keel::usize lda,
             // Backward substitution
             for (keel::isize k_idx = as<keel::isize>(n) - 1; k_idx >= 0; --k_idx) {
                 const keel::usize k = as<keel::usize>(k_idx);
-                const double diag = reinterpret_cast<const double*>(LU_stack)[k + k * n];
+                const f64 diag = reinterpret_cast<const f64*>(LU_stack)[k + k * n];
                 x_col0[k] /= diag; x_col1[k] /= diag; x_col2[k] /= diag; x_col3[k] /= diag;
-                const double x0 = x_col0[k];
-                const double x1 = x_col1[k];
-                const double x2 = x_col2[k];
-                const double x3 = x_col3[k];
+                const f64 x0 = x_col0[k];
+                const f64 x1 = x_col1[k];
+                const f64 x2 = x_col2[k];
+                const f64 x3 = x_col3[k];
                 if (x0 == 0.0 && x1 == 0.0 && x2 == 0.0 && x3 == 0.0) continue;
                 
-                const double *u_col = reinterpret_cast<const double*>(LU_stack) + k * n;
-                double *y0 = x_col0; double *y1 = x_col1; double *y2 = x_col2; double *y3 = x_col3;
-                const double n0 = -x0; const double n1 = -x1; const double n2 = -x2; const double n3 = -x3;
+                const f64 *u_col = reinterpret_cast<const f64*>(LU_stack) + k * n;
+                f64 *y0 = x_col0; f64 *y1 = x_col1; f64 *y2 = x_col2; f64 *y3 = x_col3;
+                const f64 n0 = -x0; const f64 n1 = -x1; const f64 n2 = -x2; const f64 n3 = -x3;
                 
                 keel::usize i = 0;
                 for (; i + 3 < k; i += 4) {
-                    const double u0 = u_col[i + 0];
-                    const double u1 = u_col[i + 1];
-                    const double u2 = u_col[i + 2];
-                    const double u3 = u_col[i + 3];
+                    const f64 u0 = u_col[i + 0];
+                    const f64 u1 = u_col[i + 1];
+                    const f64 u2 = u_col[i + 2];
+                    const f64 u3 = u_col[i + 3];
 
                     y0[i+0] += u0 * n0; y0[i+1] += u1 * n0; y0[i+2] += u2 * n0; y0[i+3] += u3 * n0;
                     y1[i+0] += u0 * n1; y1[i+1] += u1 * n1; y1[i+2] += u2 * n1; y1[i+3] += u3 * n1;
@@ -298,7 +298,7 @@ bool la_solve_small_fastpath(const T *A, keel::usize lda,
                     y3[i+0] += u0 * n3; y3[i+1] += u1 * n3; y3[i+2] += u2 * n3; y3[i+3] += u3 * n3;
                 }
                 for (; i < k; ++i) {
-                    const double u = u_col[i];
+                    const f64 u = u_col[i];
                     y0[i] += u * n0; y1[i] += u * n1; y2[i] += u * n2; y3[i] += u * n3;
                 }
             }
@@ -311,11 +311,11 @@ bool la_solve_small_fastpath(const T *A, keel::usize lda,
         for (keel::usize k = 0; k < n; ++k) {
             const T xkj = x_col[k];
             if (xkj == T(0)) continue;
-            if constexpr (keel::IsSame<T, double>) {
-                const double *l_col = LU_stack + k * n;
-                double *y_ptr = x_col;
+            if constexpr (keel::IsSame<T, f64>) {
+                const f64 *l_col = LU_stack + k * n;
+                f64 *y_ptr = x_col;
                 const keel::usize rem = n - (k + 1);
-                const double neg_x = -xkj;
+                const f64 neg_x = -xkj;
                 keel::linalg::axpy(rem, neg_x, l_col + (k + 1), y_ptr + (k + 1));
             } else {
                 for (keel::usize i = k + 1; i < n; ++i) {
@@ -327,11 +327,11 @@ bool la_solve_small_fastpath(const T *A, keel::usize lda,
             x_col[k] /= LU_stack[k + k * n];
             const T xkj = x_col[k];
             if (xkj == T(0)) continue;
-            if constexpr (keel::IsSame<T, double>) {
-                const double *u_col = LU_stack + k * n;
-                double *y_ptr = x_col;
+            if constexpr (keel::IsSame<T, f64>) {
+                const f64 *u_col = LU_stack + k * n;
+                f64 *y_ptr = x_col;
                 const keel::usize rem = as<keel::usize>(k);
-                const double neg_x = -xkj;
+                const f64 neg_x = -xkj;
                 keel::linalg::axpy(rem, neg_x, u_col, y_ptr);
             } else {
                 for (keel::isize i = k - 1; i >= 0; --i) {
@@ -397,9 +397,9 @@ void trsm_L_blocked_seq(keel::usize n, keel::usize nrhs, const T *A, keel::usize
             for (keel::usize c = 0; c < nrhs; ++c) {
                 const T xkc = B[j + k + c * ldb];
                 if (xkc != T(0)) {
-                    if constexpr (keel::IsSame<T, double>) {
+                    if constexpr (keel::IsSame<T, f64>) {
                         if (jb > k + 1) {
-                            keel::linalg::axpy(jb - (k + 1), -xkc, reinterpret_cast<const double*>(l_col + j + k + 1), reinterpret_cast<double*>(B + j + k + 1 + c * ldb));
+                            keel::linalg::axpy(jb - (k + 1), -xkc, reinterpret_cast<const f64*>(l_col + j + k + 1), reinterpret_cast<f64*>(B + j + k + 1 + c * ldb));
                         }
                     } else {
                         for (keel::usize i = k + 1; i < jb; ++i) {
@@ -415,12 +415,12 @@ void trsm_L_blocked_seq(keel::usize n, keel::usize nrhs, const T *A, keel::usize
             const T* L21 = A + j * lda + (j + jb);
             T* B2 = B + (j + jb);
             
-            if constexpr (keel::IsSame<T, double>) {
+            if constexpr (keel::IsSame<T, f64>) {
                 keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, rem_m, nrhs, jb, -1.0, 
-                                  reinterpret_cast<const double*>(L21), lda, 
-                                  reinterpret_cast<const double*>(B + j), ldb, 
+                                  reinterpret_cast<const f64*>(L21), lda, 
+                                  reinterpret_cast<const f64*>(B + j), ldb, 
                                   1.0, 
-                                  reinterpret_cast<double*>(B2), ldb);
+                                  reinterpret_cast<f64*>(B2), ldb);
             } else {
                 keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, rem_m, nrhs, jb, keel::c64(-1.0, 0.0), 
                                   reinterpret_cast<const keel::c64*>(L21), lda, 
@@ -448,9 +448,9 @@ void trsm_U_blocked_seq(keel::usize n, keel::usize nrhs, const T *A, keel::usize
                 B[j + k + c * ldb] /= akk;
                 const T xkc = B[j + k + c * ldb];
                 if (xkc != T(0)) {
-                    if constexpr (keel::IsSame<T, double>) {
+                    if constexpr (keel::IsSame<T, f64>) {
                         if (k > 0) {
-                            keel::linalg::axpy(k, -xkc, reinterpret_cast<const double*>(u_col + j), reinterpret_cast<double*>(B + j + c * ldb));
+                            keel::linalg::axpy(k, -xkc, reinterpret_cast<const f64*>(u_col + j), reinterpret_cast<f64*>(B + j + c * ldb));
                         }
                     } else {
                         for (keel::usize i = 0; i < k; ++i) {
@@ -466,12 +466,12 @@ void trsm_U_blocked_seq(keel::usize n, keel::usize nrhs, const T *A, keel::usize
             const T* U12 = A + j * lda;
             T* B1 = B;
             
-            if constexpr (keel::IsSame<T, double>) {
+            if constexpr (keel::IsSame<T, f64>) {
                 keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, rem_m, nrhs, jb, -1.0, 
-                                  reinterpret_cast<const double*>(U12), lda, 
-                                  reinterpret_cast<const double*>(B + j), ldb, 
+                                  reinterpret_cast<const f64*>(U12), lda, 
+                                  reinterpret_cast<const f64*>(B + j), ldb, 
                                   1.0, 
-                                  reinterpret_cast<double*>(B1), ldb);
+                                  reinterpret_cast<f64*>(B1), ldb);
             } else {
                 keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans, rem_m, nrhs, jb, keel::c64(-1.0, 0.0), 
                                   reinterpret_cast<const keel::c64*>(U12), lda, 
@@ -555,16 +555,16 @@ bool lu_blocked_inplace(T *A, keel::usize lda, keel::i32 *piv, keel::usize m, ke
                 }
             } else {
                 keel::linalg::trsm(keel::linalg::MatrixSide::Left, keel::linalg::MatrixUplo::Lower, keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixDiag::Unit,
-                          jb, rem_n, 1.0, reinterpret_cast<const double*>(L11), lda,
-                          reinterpret_cast<double*>(U12), lda);
+                          jb, rem_n, 1.0, reinterpret_cast<const f64*>(L11), lda,
+                          reinterpret_cast<f64*>(U12), lda);
                 if (rem_m > jb) {
                     // GEMM: A22 -= L21 * U12
                     keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans,
                               rem_m - jb, rem_n, jb, -1.0,
-                              reinterpret_cast<const double*>(L11 + jb), lda,
-                              reinterpret_cast<const double*>(U12), lda,
+                              reinterpret_cast<const f64*>(L11 + jb), lda,
+                              reinterpret_cast<const f64*>(U12), lda,
                               1.0,
-                              reinterpret_cast<double*>(U12 + jb), lda);
+                              reinterpret_cast<f64*>(U12 + jb), lda);
                 }
             }
         }
@@ -624,7 +624,7 @@ bool la_solve_impl(const T *A, keel::usize m, keel::usize n, const T *B, keel::u
 
 } // anonymous namespace
 
-bool la_solve(const double *A, keel::usize m, keel::usize n, const double *B, keel::usize nrhs, double *X, keel::Allocator *mr) noexcept
+bool la_solve(const f64 *A, keel::usize m, keel::usize n, const f64 *B, keel::usize nrhs, f64 *X, keel::Allocator *mr) noexcept
 {
     return la_solve_impl(A, m, n, B, nrhs, X, mr);
 }
@@ -634,7 +634,7 @@ bool la_solve(const keel::c64 *A, keel::usize m, keel::usize n, const keel::c64 
     return la_solve_impl(A, m, n, B, nrhs, X, mr);
 }
 
-bool lu_factor(double *A, keel::usize lda, keel::i32 *piv, keel::usize m, keel::usize n) noexcept
+bool lu_factor(f64 *A, keel::usize lda, keel::i32 *piv, keel::usize m, keel::usize n) noexcept
 {
     return lu_blocked_inplace(A, lda, piv, m, n, 0);
 }
