@@ -66,6 +66,11 @@ set(KEEL_LINALG_SOURCES
     src/blas_common.cpp
     src/solve.cpp
     src/decompositions.cpp
+    src/factor_updates.cpp
+    src/eig_schur.cpp
+    src/qz.cpp
+    src/matrix_functions.cpp
+    src/special_solvers.cpp
 )
 
 if(KEEL_LINALG_WITH_HIGHWAY)

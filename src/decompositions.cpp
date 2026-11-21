@@ -473,6 +473,64 @@ void svd_jacobi_impl(T* A, usize m, usize n, T* V, f64* S, Allocator* alloc) noe
     for (usize i = 0; i < n; ++i) S[i] = S_sorted[i];
 }
 
+template <typename T>
+void svd_full_impl(const T* A, usize m_in, usize n_in, T* U, f64* S, T* V, Allocator* alloc) noexcept {
+    if (m_in == 0 || n_in == 0) {
+        for (usize i = 0; i < m_in * m_in; ++i) U[i] = T(0);
+        for (usize i = 0; i < m_in; ++i) U[i + i * m_in] = T(1);
+        for (usize i = 0; i < n_in * n_in; ++i) V[i] = T(0);
+        for (usize i = 0; i < n_in; ++i) V[i + i * n_in] = T(1);
+        return;
+    }
+
+    const bool transposed = (m_in < n_in);
+    const usize m = transposed ? n_in : m_in;
+    const usize n = transposed ? m_in : n_in;
+
+    ArenaTemp scratch = get_scratch(alloc);
+    Array<T> A_work(m * n, T(0), scratch.allocator());
+    T* U_tall = transposed ? V : U;
+    T* V_short = transposed ? U : V;
+
+    if (!transposed) {
+        for (usize i = 0; i < m * n; ++i) A_work[i] = A[i];
+    } else {
+        for (usize j = 0; j < n_in; ++j) {
+            for (usize i = 0; i < m_in; ++i) {
+                A_work[j + i * n_in] = conj_if_complex(A[i + j * m_in]);
+            }
+        }
+    }
+
+    svd_jacobi_impl(A_work.data(), m, n, V_short, S, scratch.allocator());
+
+    for (usize i = 0; i < m * m; ++i) U_tall[i] = T(0);
+    usize r_nz = 0;
+    for (usize k = 0; k < n; ++k) {
+        if (S[k] > 0.0) {
+            for (usize i = 0; i < m; ++i) {
+                U_tall[i + k * m] = A_work[i + k * m];
+            }
+            r_nz = k + 1;
+        }
+    }
+
+    if (r_nz == 0) {
+        for (usize i = 0; i < m; ++i) {
+            U_tall[i + i * m] = T(1);
+        }
+    } else if (r_nz < m) {
+        Array<T> Q_full(m * m, T(0), scratch.allocator());
+        Array<T> R_dummy(m * r_nz, T(0), scratch.allocator());
+        qr_householder_impl(U_tall, m, r_nz, Q_full.data(), R_dummy.data(), scratch.allocator());
+        for (usize j = r_nz; j < m; ++j) {
+            for (usize i = 0; i < m; ++i) {
+                U_tall[i + j * m] = Q_full[i + j * m];
+            }
+        }
+    }
+}
+
 } // namespace
 
 usize cholesky_upper(const f64* A, f64* R, usize n) noexcept {
@@ -505,6 +563,14 @@ void svd_jacobi_inplace(f64* A, usize m, usize n, f64* V, f64* S, Allocator* all
 
 void svd_jacobi_inplace(c64* A, usize m, usize n, c64* V, f64* S, Allocator* alloc) noexcept {
     svd_jacobi_impl(A, m, n, V, S, alloc);
+}
+
+void svd_full(const f64* A, usize m, usize n, f64* U, f64* S, f64* V, Allocator* alloc) noexcept {
+    svd_full_impl(A, m, n, U, S, V, alloc);
+}
+
+void svd_full(const c64* A, usize m, usize n, c64* U, f64* S, c64* V, Allocator* alloc) noexcept {
+    svd_full_impl(A, m, n, U, S, V, alloc);
 }
 
 } // namespace keel

@@ -644,6 +644,55 @@ bool lu_factor(keel::c64 *A, keel::usize lda, keel::i32 *piv, keel::usize m, kee
     return lu_blocked_inplace(A, lda, piv, m, n, 0);
 }
 
+template <typename T>
+static bool lu_factor_general_impl(T* LU, usize m, usize n, i32* piv) noexcept {
+    const usize k = linalg_detail::linalg_min(m, n);
+    if (k == 0) return true;
+
+    bool nonsingular = true;
+    for (usize j = 0; j < k; ++j) {
+        usize p = j;
+        f64 max_val = abs_val(LU[j + j * m]);
+        for (usize i = j + 1; i < m; ++i) {
+            const f64 v = abs_val(LU[i + j * m]);
+            if (v > max_val) {
+                max_val = v;
+                p = i;
+            }
+        }
+        piv[j] = static_cast<i32>(p);
+        if (p != j) {
+            for (usize c = 0; c < n; ++c) {
+                keel::swap(LU[j + c * m], LU[p + c * m]);
+            }
+        }
+        const T diag = LU[j + j * m];
+        if (abs_val(diag) != 0.0) {
+            for (usize i = j + 1; i < m; ++i) {
+                LU[i + j * m] /= diag;
+            }
+            for (usize c = j + 1; c < n; ++c) {
+                const T ujc = LU[j + c * m];
+                if (ujc == T(0)) continue;
+                for (usize i = j + 1; i < m; ++i) {
+                    LU[i + c * m] -= LU[i + j * m] * ujc;
+                }
+            }
+        } else {
+            nonsingular = false;
+        }
+    }
+    return nonsingular;
+}
+
+bool lu_factor_general(f64* A, usize m, usize n, i32* piv) noexcept {
+    return lu_factor_general_impl(A, m, n, piv);
+}
+
+bool lu_factor_general(c64* A, usize m, usize n, i32* piv) noexcept {
+    return lu_factor_general_impl(A, m, n, piv);
+}
+
 
 template <typename T>
 static bool matrix_inv_impl(const T* A, usize n, T* A_inv, Allocator* alloc) noexcept {
