@@ -333,7 +333,8 @@ void qr_pivoted_impl(const T* A_in, usize m, usize n, T* Qout, T* Rout, usize* p
 // ============================================================================
 
 template <typename T>
-void svd_jacobi_impl(T* A, usize m, usize n, T* V, f64* S, Allocator* alloc) noexcept {
+void svd_jacobi_impl(T* A, usize m, usize n, T* V, f64* S, Allocator* alloc,
+                     bool complete_zero_cols = true) noexcept {
     if (m == 0 || n == 0) return;
 
     for (usize i = 0; i < n * n; ++i) V[i] = T(0);
@@ -341,72 +342,93 @@ void svd_jacobi_impl(T* A, usize m, usize n, T* V, f64* S, Allocator* alloc) noe
 
     auto col_dot = [&](usize p, usize q) noexcept -> T {
         T s = T(0);
+        const T* ap = A + p * m;
+        const T* aq = A + q * m;
         for (usize i = 0; i < m; ++i) {
-            s += conj_if_complex(A[i + p * m]) * A[i + q * m];
+            s += conj_if_complex(ap[i]) * aq[i];
         }
         return s;
     };
 
     auto rotate_cols = [](T* M, usize ld, usize nrows, usize p, usize q, f64 c, T s) noexcept {
         const T s_conj = conj_if_complex(s);
+        T* mp = M + p * ld;
+        T* mq = M + q * ld;
         for (usize i = 0; i < nrows; ++i) {
-            const T mip = M[i + p * ld];
-            const T miq = M[i + q * ld];
-            M[i + p * ld] = c * mip - s_conj * miq;
-            M[i + q * ld] = s * mip + c * miq;
+            const T mip = mp[i];
+            const T miq = mq[i];
+            mp[i] = c * mip - s_conj * miq;
+            mq[i] = s * mip + c * miq;
         }
     };
 
+    ArenaTemp scratch = get_scratch(alloc);
+    Array<f64> col_norm_sq(n, 0.0, scratch.allocator());
+    f64 max_norm_sq = 0.0;
+    for (usize j = 0; j < n; ++j) {
+        const f64 nsq = real_part(col_dot(j, j));
+        col_norm_sq[j] = nsq;
+        if (nsq > max_norm_sq) max_norm_sq = nsq;
+    }
+
     constexpr usize kMaxSweeps = 60;
     constexpr f64 kTol = 1e-15;
+    const f64 zero_norm_sq = (max_norm_sq > 0.0) ? (1e-30 * max_norm_sq) : 0.0;
 
-    for (usize sweep = 0; sweep < kMaxSweeps; ++sweep) {
-        f64 off = 0.0;
-        for (usize p = 0; p + 1 < n; ++p) {
-            for (usize q = p + 1; q < n; ++q) {
-                const f64 alpha = real_part(col_dot(p, p));
-                const f64 beta = real_part(col_dot(q, q));
-                const T gamma_val = col_dot(p, q);
-                const f64 abs_gamma = abs_val(gamma_val);
+    if (max_norm_sq > 0.0) {
+        for (usize sweep = 0; sweep < kMaxSweeps; ++sweep) {
+            f64 off = 0.0;
+            for (usize p = 0; p + 1 < n; ++p) {
+                if (col_norm_sq[p] <= zero_norm_sq) continue;
+                for (usize q = p + 1; q < n; ++q) {
+                    const f64 alpha = col_norm_sq[p];
+                    const f64 beta = col_norm_sq[q];
+                    if (alpha <= zero_norm_sq) break;
+                    if (beta <= zero_norm_sq) continue;
 
-                const f64 scale = keel::sqrt(alpha * beta);
-                if (abs_gamma <= kTol * scale) continue;
-                off += abs_gamma * abs_gamma;
+                    const T gamma_val = col_dot(p, q);
+                    const f64 abs_gamma = abs_val(gamma_val);
 
-                f64 c = 0.0;
-                f64 s_real = 0.0;
-                if (alpha == beta) {
-                    c = 0.7071067811865476;
-                    s_real = c;
-                } else {
-                    const f64 tau = (beta - alpha) / (2.0 * abs_gamma);
-                    const f64 t =
-                        (tau >= 0.0) ? (1.0 / (tau + keel::sqrt(1.0 + tau * tau)))
-                                     : (1.0 / (tau - keel::sqrt(1.0 + tau * tau)));
-                    c = 1.0 / keel::sqrt(1.0 + t * t);
-                    s_real = t * c;
+                    const f64 scale = keel::sqrt(alpha * beta);
+                    if (abs_gamma <= kTol * scale) continue;
+                    off += abs_gamma * abs_gamma;
+
+                    f64 c = 0.0;
+                    f64 s_real = 0.0;
+                    if (alpha == beta) {
+                        c = 0.7071067811865476;
+                        s_real = c;
+                    } else {
+                        const f64 tau = (beta - alpha) / (2.0 * abs_gamma);
+                        const f64 t =
+                            (tau >= 0.0) ? (1.0 / (tau + keel::sqrt(1.0 + tau * tau)))
+                                         : (1.0 / (tau - keel::sqrt(1.0 + tau * tau)));
+                        c = 1.0 / keel::sqrt(1.0 + t * t);
+                        s_real = t * c;
+                    }
+
+                    T s;
+                    if constexpr (kIsComplex<T>) {
+                        const T phase = (abs_gamma > 0.0) ? (gamma_val / abs_gamma) : T(1.0, 0.0);
+                        s = s_real * phase;
+                    } else {
+                        s = s_real * ((gamma_val >= 0.0) ? 1.0 : -1.0);
+                    }
+
+                    rotate_cols(A, m, m, p, q, c, s);
+                    rotate_cols(V, n, n, p, q, c, s);
+                    col_norm_sq[p] = real_part(col_dot(p, p));
+                    col_norm_sq[q] = real_part(col_dot(q, q));
                 }
-
-                T s;
-                if constexpr (kIsComplex<T>) {
-                    const T phase = (abs_gamma > 0.0) ? (gamma_val / abs_gamma) : T(1.0, 0.0);
-                    s = s_real * phase;
-                } else {
-                    s = s_real * ((gamma_val >= 0.0) ? 1.0 : -1.0);
-                }
-
-                rotate_cols(A, m, m, p, q, c, s);
-                rotate_cols(V, n, n, p, q, c, s);
             }
+            if (off <= kTol * kTol * max_norm_sq * max_norm_sq) break;
         }
-        if (off < kTol * kTol) break;
     }
 
     // Compute singular values (column norms) and sort columns in descending order.
-    ArenaTemp scratch = get_scratch(alloc);
     Array<usize> order(n, scratch.allocator());
     for (usize j = 0; j < n; ++j) {
-        S[j] = keel::sqrt(real_part(col_dot(j, j)));
+        S[j] = keel::sqrt(col_norm_sq[j] > 0.0 ? col_norm_sq[j] : 0.0);
         order[j] = j;
     }
 
@@ -427,13 +449,16 @@ void svd_jacobi_impl(T* A, usize m, usize n, T* V, f64* S, Allocator* alloc) noe
     Array<T> V_sorted(n * n, T(0), scratch.allocator());
     Array<f64> S_sorted(n, 0.0, scratch.allocator());
 
+    const f64 s_max = (n > 0) ? S[order[0]] : 0.0;
+    const f64 zero_tol = 1e-14 * s_max;
+
     for (usize j = 0; j < n; ++j) {
         const usize src = order[j];
         S_sorted[j] = S[src];
         for (usize i = 0; i < n; ++i) {
             V_sorted[i + j * n] = V[i + src * n];
         }
-        if (S_sorted[j] > 0.0) {
+        if (S_sorted[j] > zero_tol) {
             const f64 inv_s = 1.0 / S_sorted[j];
             for (usize i = 0; i < m; ++i) {
                 U_sorted[i + j * m] = A[i + src * m] * inv_s;
@@ -442,28 +467,32 @@ void svd_jacobi_impl(T* A, usize m, usize n, T* V, f64* S, Allocator* alloc) noe
     }
 
     // Complete orthonormal basis for any zero-norm U columns via modified Gram-Schmidt.
-    const f64 s_max = (n > 0) ? S_sorted[0] : 0.0;
-    const f64 zero_tol = 1e-14 * ((s_max > 0.0) ? s_max : 1.0);
-    for (usize j = 0; j < n; ++j) {
-        if (S_sorted[j] > zero_tol) continue;
-        // Pick canonical basis vector e_r with largest orthogonal component against columns 0..j-1.
-        for (usize r = 0; r < m; ++r) {
-            for (usize i = 0; i < m; ++i) U_sorted[i + j * m] = (i == r) ? T(1) : T(0);
-            for (usize prev = 0; prev < j; ++prev) {
-                T dp = T(0);
-                for (usize i = 0; i < m; ++i) {
-                    dp += conj_if_complex(U_sorted[i + prev * m]) * U_sorted[i + j * m];
+    // Advance the candidate basis index monotonically so rank-deficient matrices
+    // run in O(m*n^2) instead of O(m*n^3). Skip entirely when caller completes U via QR.
+    if (complete_zero_cols) {
+        usize next_r = 0;
+        for (usize j = 0; j < n; ++j) {
+            if (S_sorted[j] > zero_tol) continue;
+            for (usize attempt = 0; attempt < m; ++attempt) {
+                const usize r = (next_r + attempt) % m;
+                for (usize i = 0; i < m; ++i) U_sorted[i + j * m] = (i == r) ? T(1) : T(0);
+                for (usize prev = 0; prev < j; ++prev) {
+                    T dp = T(0);
+                    for (usize i = 0; i < m; ++i) {
+                        dp += conj_if_complex(U_sorted[i + prev * m]) * U_sorted[i + j * m];
+                    }
+                    for (usize i = 0; i < m; ++i) {
+                        U_sorted[i + j * m] -= dp * U_sorted[i + prev * m];
+                    }
                 }
-                for (usize i = 0; i < m; ++i) {
-                    U_sorted[i + j * m] -= dp * U_sorted[i + prev * m];
+                f64 nrm_sq = 0.0;
+                for (usize i = 0; i < m; ++i) nrm_sq += abs_sq(U_sorted[i + j * m]);
+                if (nrm_sq > 1e-12) {
+                    const f64 inv_nrm = 1.0 / keel::sqrt(nrm_sq);
+                    for (usize i = 0; i < m; ++i) U_sorted[i + j * m] *= inv_nrm;
+                    next_r = (r + 1) % m;
+                    break;
                 }
-            }
-            f64 nrm_sq = 0.0;
-            for (usize i = 0; i < m; ++i) nrm_sq += abs_sq(U_sorted[i + j * m]);
-            if (nrm_sq > 1e-12) {
-                const f64 inv_nrm = 1.0 / keel::sqrt(nrm_sq);
-                for (usize i = 0; i < m; ++i) U_sorted[i + j * m] *= inv_nrm;
-                break;
             }
         }
     }
@@ -502,12 +531,13 @@ void svd_full_impl(const T* A, usize m_in, usize n_in, T* U, f64* S, T* V, Alloc
         }
     }
 
-    svd_jacobi_impl(A_work.data(), m, n, V_short, S, scratch.allocator());
+    svd_jacobi_impl(A_work.data(), m, n, V_short, S, scratch.allocator(), false);
 
     for (usize i = 0; i < m * m; ++i) U_tall[i] = T(0);
+    const f64 zero_tol = (n > 0) ? (1e-14 * S[0]) : 0.0;
     usize r_nz = 0;
     for (usize k = 0; k < n; ++k) {
-        if (S[k] > 0.0) {
+        if (S[k] > zero_tol) {
             for (usize i = 0; i < m; ++i) {
                 U_tall[i + k * m] = A_work[i + k * m];
             }

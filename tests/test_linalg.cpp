@@ -483,6 +483,40 @@ void test_svd() {
         for (keel::usize i = 0; i < n; ++i) eye[i + i * n] = keel::c64(1.0, 0.0);
         CHECK(max_diff(VtV.data(), eye.data(), n * n) < 1e-11);
     }
+
+    // Rank-1 square svd_full (verifies fast zero-column handling and full U/V orthogonality)
+    {
+        const keel::usize n = 64;
+        keel::Array<keel::f64> A(n * n, 0.0);
+        for (keel::usize j = 16; j < 48; ++j) {
+            for (keel::usize i = 16; i < 48; ++i) {
+                A[i + j * n] = 1.0;
+            }
+        }
+        keel::Array<keel::f64> U(n * n, 0.0);
+        keel::Array<keel::f64> S(n, 0.0);
+        keel::Array<keel::f64> V(n * n, 0.0);
+        keel::linalg::svd_full(A.data(), n, n, U.data(), S.data(), V.data());
+        CHECK(keel::abs(S[0] - 32.0) < 1e-11);
+        for (keel::usize k = 1; k < n; ++k) CHECK(S[k] < 1e-11);
+
+        keel::Array<keel::f64> Smat(n * n, 0.0);
+        for (keel::usize i = 0; i < n; ++i) Smat[i + i * n] = S[i];
+        keel::Array<keel::f64> US(n * n, 0.0);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans,
+                           n, n, n, 1.0, U.data(), n, Smat.data(), n, 0.0, US.data(), n);
+        keel::Array<keel::f64> rec(n * n, 0.0);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::Trans,
+                           n, n, n, 1.0, US.data(), n, V.data(), n, 0.0, rec.data(), n);
+        CHECK(max_diff(rec.data(), A.data(), n * n) < 1e-11);
+
+        keel::Array<keel::f64> UtU(n * n, 0.0);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::Trans, keel::linalg::MatrixTranspose::NoTrans,
+                           n, n, n, 1.0, U.data(), n, U.data(), n, 0.0, UtU.data(), n);
+        keel::Array<keel::f64> eye(n * n, 0.0);
+        for (keel::usize i = 0; i < n; ++i) eye[i + i * n] = 1.0;
+        CHECK(max_diff(UtU.data(), eye.data(), n * n) < 1e-11);
+    }
 }
 
 void test_factor_updates_ldl_balance() {
