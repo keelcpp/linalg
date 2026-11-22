@@ -434,14 +434,10 @@ if (m == 0 || n == 0) return;
                         { \
                             auto br = hn::Set(d, br_k[col_idx]); \
                             auto bi = hn::Set(d, bi_k[col_idx]); \
-                            cr_acc0 = hn::MulAdd(ar0, br, cr_acc0); \
-                            cr_acc0 = hn::NegMulAdd(ai0, bi, cr_acc0); \
-                            cr_acc1 = hn::MulAdd(ar1, br, cr_acc1); \
-                            cr_acc1 = hn::NegMulAdd(ai1, bi, cr_acc1); \
-                            ci_acc0 = hn::MulAdd(ar0, bi, ci_acc0); \
-                            ci_acc0 = hn::MulAdd(ai0, br, ci_acc0); \
-                            ci_acc1 = hn::MulAdd(ar1, bi, ci_acc1); \
-                            ci_acc1 = hn::MulAdd(ai1, br, ci_acc1); \
+                            cr_acc0 = hn::Add(cr_acc0, hn::Sub(hn::Mul(ar0, br), hn::Mul(ai0, bi))); \
+                            cr_acc1 = hn::Add(cr_acc1, hn::Sub(hn::Mul(ar1, br), hn::Mul(ai1, bi))); \
+                            ci_acc0 = hn::Add(ci_acc0, hn::Add(hn::Mul(ar0, bi), hn::Mul(ai0, br))); \
+                            ci_acc1 = hn::Add(ci_acc1, hn::Add(hn::Mul(ar1, bi), hn::Mul(ai1, br))); \
                         }
 
                         KERNEL_COL_FAST(0, cr00, cr10, ci00, ci10);
@@ -501,12 +497,20 @@ if (m == 0 || n == 0) return;
                         const keel::f64 *br_col = br_p_tile + c;
                         const keel::f64 *bi_col = bi_p_tile + c;
                         for (keel::usize r = 0; r < cur_mr; ++r) {
-                            keel::c64 acc(0.0, 0.0);
+                            keel::f64 acc_r = 0.0;
+                            keel::f64 acc_i = 0.0;
                             for (keel::usize kk = 0; kk < kc; ++kk) {
-                                keel::c64 a_val(ar_p[kk * mr + r], ai_p[kk * mr + r]);
-                                keel::c64 b_val(br_col[kk * nr], bi_col[kk * nr]);
-                                acc += a_val * b_val;
+#if defined(__clang__)
+#pragma clang fp contract(off)
+#endif
+                                const keel::f64 ar = ar_p[kk * mr + r];
+                                const keel::f64 ai = ai_p[kk * mr + r];
+                                const keel::f64 br = br_col[kk * nr];
+                                const keel::f64 bi = bi_col[kk * nr];
+                                acc_r += ar * br - ai * bi;
+                                acc_i += ar * bi + ai * br;
                             }
+                            const keel::c64 acc(acc_r, acc_i);
                             if (beta == keel::c64(0.0, 0.0)) {
                                 col_c[r] = alpha * acc;
                             } else {
@@ -620,14 +624,10 @@ if (m == 0 || n == 0) return;
                                     { \
                                         auto br = hn::Set(d, br_k[col_idx]); \
                                         auto bi = hn::Set(d, bi_k[col_idx]); \
-                                        cr_acc0 = hn::MulAdd(ar0, br, cr_acc0); \
-                                        cr_acc0 = hn::NegMulAdd(ai0, bi, cr_acc0); \
-                                        cr_acc1 = hn::MulAdd(ar1, br, cr_acc1); \
-                                        cr_acc1 = hn::NegMulAdd(ai1, bi, cr_acc1); \
-                                        ci_acc0 = hn::MulAdd(ar0, bi, ci_acc0); \
-                                        ci_acc0 = hn::MulAdd(ai0, br, ci_acc0); \
-                                        ci_acc1 = hn::MulAdd(ar1, bi, ci_acc1); \
-                                        ci_acc1 = hn::MulAdd(ai1, br, ci_acc1); \
+                                        cr_acc0 = hn::Add(cr_acc0, hn::Sub(hn::Mul(ar0, br), hn::Mul(ai0, bi))); \
+                                        cr_acc1 = hn::Add(cr_acc1, hn::Sub(hn::Mul(ar1, br), hn::Mul(ai1, bi))); \
+                                        ci_acc0 = hn::Add(ci_acc0, hn::Add(hn::Mul(ar0, bi), hn::Mul(ai0, br))); \
+                                        ci_acc1 = hn::Add(ci_acc1, hn::Add(hn::Mul(ar1, bi), hn::Mul(ai1, br))); \
                                     }
 
                                     KERNEL_COL(0, cr00, cr10, ci00, ci10);
@@ -690,12 +690,20 @@ if (m == 0 || n == 0) return;
                                     const keel::f64 *br_col = br_p_tile + c;
                                     const keel::f64 *bi_col = bi_p_tile + c;
                                     for (keel::usize r = 0; r < cur_mr; ++r) {
-                                        keel::c64 acc(0.0, 0.0);
+                                        keel::f64 acc_r = 0.0;
+                                        keel::f64 acc_i = 0.0;
                                         for (keel::usize kk = 0; kk < kc; ++kk) {
-                                            keel::c64 a_val(ar_p[kk * mr + r], ai_p[kk * mr + r]);
-                                            keel::c64 b_val(br_col[kk * nr], bi_col[kk * nr]);
-                                            acc += a_val * b_val;
+#if defined(__clang__)
+#pragma clang fp contract(off)
+#endif
+                                            const keel::f64 ar = ar_p[kk * mr + r];
+                                            const keel::f64 ai = ai_p[kk * mr + r];
+                                            const keel::f64 br = br_col[kk * nr];
+                                            const keel::f64 bi = bi_col[kk * nr];
+                                            acc_r += ar * br - ai * bi;
+                                            acc_i += ar * bi + ai * br;
                                         }
+                                        const keel::c64 acc(acc_r, acc_i);
                                         if (current_beta == keel::c64(0.0, 0.0)) {
                                             col_c[r] = alpha * acc;
                                         } else {

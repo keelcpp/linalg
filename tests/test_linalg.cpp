@@ -1014,12 +1014,42 @@ void test_matrix_functions_and_solvers() {
     }
 }
 
+void test_complex_gram_hermitian() {
+    for (keel::usize n : {keel::usize{3}, keel::usize{16}}) {
+        keel::Array<keel::c64> A(n * n);
+        for (keel::usize i = 0; i < n * n; ++i) {
+            A[i] = keel::c64(det_val(i, 7, 100), det_val(i, 11, 200));
+        }
+        keel::Array<keel::c64> C1(n * n, keel::c64(0.0, 0.0));
+        keel::Array<keel::c64> C2(n * n, keel::c64(0.0, 0.0));
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans,
+                           keel::linalg::MatrixTranspose::ConjTrans,
+                           n, n, n, keel::c64(1.0, 0.0), A.data(), n, A.data(), n,
+                           keel::c64(0.0, 0.0), C1.data(), n);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::ConjTrans,
+                           keel::linalg::MatrixTranspose::NoTrans,
+                           n, n, n, keel::c64(1.0, 0.0), A.data(), n, A.data(), n,
+                           keel::c64(0.0, 0.0), C2.data(), n);
+        for (keel::usize i = 0; i < n; ++i) {
+            CHECK(C1[i + i * n].imag() == 0.0);
+            CHECK(C2[i + i * n].imag() == 0.0);
+            for (keel::usize j = i + 1; j < n; ++j) {
+                CHECK(C1[i + j * n].real() == C1[j + i * n].real());
+                CHECK(C1[i + j * n].imag() == -C1[j + i * n].imag());
+                CHECK(C2[i + j * n].real() == C2[j + i * n].real());
+                CHECK(C2[i + j * n].imag() == -C2[j + i * n].imag());
+            }
+        }
+    }
+}
+
 } // namespace
 
 int main() {
     test_blas1();
     test_blas2();
     test_gemm();
+    test_complex_gram_hermitian();
     test_trsm_and_syrk();
     test_solve_lu_inv();
     test_cholesky();
