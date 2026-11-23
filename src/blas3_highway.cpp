@@ -182,13 +182,13 @@ void GemmDoubleKernel(keel::usize m, keel::usize n, keel::usize k,
     // not change per-element floating point summation order or results.
     const keel::usize p_thresh = (total_flops >= kGemmParallelFlopThreshold) ? keel::usize{1} : n + 1;
 
-    std::atomic<keel::usize> active_threads{0};
+    keel::Atomic<keel::usize> active_threads{0};
 
     // Limit threads for small n to avoid redundant packing of A
     keel::i32 max_threads = as<keel::i32>(keel::max<keel::usize>(1, n / 16));
 
     keel::linalg::linalg_detail::parallel_for(n, p_thresh, [&](keel::usize jc_start, keel::usize jc_end) {
-        active_threads.fetch_add(1, std::memory_order_relaxed);
+        active_threads.fetch_add(1, keel::MemoryOrder::Relaxed);
         const keel::usize mc_padded = ((mc_block + mr - 1) / mr) * mr;
         constexpr keel::usize nc_padded = ((nc_block + nr - 1) / nr) * nr;
         // Zero-allocation thread_local static packing buffers (persisted per thread)

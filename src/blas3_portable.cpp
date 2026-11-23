@@ -82,7 +82,7 @@ void gemm_portable(MatrixTranspose transa, MatrixTranspose transb,
 
     // Update global atomic for test determinism check
 #if defined(KEEL_LINALG_WITH_THREADS)
-    keel::linalg::linalg_detail::g_last_gemm_threads_used.store(as<keel::i32>(keel::ThreadPool::global().num_workers()));
+    keel::linalg::linalg_detail::g_last_gemm_threads_used.store(as<keel::usize>(keel::ThreadPool::global().num_workers()));
 #else
     keel::linalg::linalg_detail::g_last_gemm_threads_used.store(1);
 #endif

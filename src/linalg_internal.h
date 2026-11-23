@@ -1,5 +1,6 @@
 #pragma once
 
+#include "keel/atomic.h"
 #include "keel/core.h"
 #include "keel/linalg.h"
 
@@ -7,11 +8,9 @@
 #include "keel/thread_pool.h"
 #endif
 
-#include <atomic>
-
 namespace keel::linalg::linalg_detail {
 
-inline std::atomic<usize> g_last_gemm_threads_used{0};
+inline keel::Atomic<usize> g_last_gemm_threads_used{0};
 
 template <typename F>
 inline void parallel_for(usize n, usize threshold, F&& fn, u32 max_workers = 0) {
