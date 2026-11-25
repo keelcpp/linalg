@@ -1,18 +1,16 @@
 #include "keel/array.h"
 #include "keel/complex.h"
+#include "keel/format.h"
 #include "keel/linalg.h"
 #include "keel/math.h"
 
-#include <cstdio>
-#include <cstdlib>
-
 namespace {
 
-int g_failures = 0;
+keel::i32 g_failures = 0;
 
-void check(bool cond, const char* expr, int line) {
+void check(bool cond, const char* expr, keel::i32 line) {
     if (!cond) {
-        std::fprintf(stderr, "FAIL [line %d]: %s\n", line, expr);
+        keel::eprintln("FAIL [line {}]: {}", line, expr);
         ++g_failures;
     }
 }
@@ -1060,9 +1058,9 @@ int main() {
     test_matrix_functions_and_solvers();
 
     if (g_failures == 0) {
-        std::printf("All keel::linalg::linalg tests passed.\n");
+        keel::println("All keel::linalg::linalg tests passed.");
         return 0;
     }
-    std::fprintf(stderr, "%d test failure(s).\n", g_failures);
+    keel::eprintln("{} test failure(s).", g_failures);
     return 1;
 }
