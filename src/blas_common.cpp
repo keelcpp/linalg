@@ -66,8 +66,14 @@ f64 nrm2(usize n, const f64* x) noexcept {
     if (n == 0) return 0.0;
     f64 scale = 0.0;
     f64 ssq = 1.0;
+    bool has_inf = false;
     for (usize i = 0; i < n; ++i) {
         const f64 ax = keel::abs(x[i]);
+        if (keel::is_nan(ax)) return ax;
+        if (keel::is_inf(ax)) {
+            has_inf = true;
+            continue;
+        }
         if (ax != 0.0) {
             if (scale < ax) {
                 const f64 r = scale / ax;
@@ -79,6 +85,7 @@ f64 nrm2(usize n, const f64* x) noexcept {
             }
         }
     }
+    if (has_inf) return Limits<f64>::infinity();
     return scale * keel::sqrt(ssq);
 }
 
@@ -86,8 +93,18 @@ f64 nrm2(usize n, const c64* x) noexcept {
     if (n == 0) return 0.0;
     f64 scale = 0.0;
     f64 ssq = 1.0;
+    bool has_inf = false;
+    bool has_nan = false;
     auto accum = [&](f64 val) noexcept {
         const f64 ax = keel::abs(val);
+        if (keel::is_nan(ax)) {
+            has_nan = true;
+            return;
+        }
+        if (keel::is_inf(ax)) {
+            has_inf = true;
+            return;
+        }
         if (ax != 0.0) {
             if (scale < ax) {
                 const f64 r = scale / ax;
@@ -103,6 +120,8 @@ f64 nrm2(usize n, const c64* x) noexcept {
         accum(x[i].real());
         accum(x[i].imag());
     }
+    if (has_nan) return Limits<f64>::quiet_nan();
+    if (has_inf) return Limits<f64>::infinity();
     return scale * keel::sqrt(ssq);
 }
 

@@ -1,8 +1,10 @@
 #include "keel/array.h"
 #include "keel/complex.h"
 #include "keel/format.h"
+#include "keel/fs.h"
 #include "keel/linalg.h"
 #include "keel/math.h"
+#include "keel/string.h"
 
 namespace {
 
@@ -77,9 +79,15 @@ void test_blas1() {
     CHECK(keel::abs(keel::linalg::dot(5, x, x) - 55.0) < 1e-12);
     CHECK(keel::abs(keel::linalg::nrm2(5, x) - keel::sqrt(55.0)) < 1e-12);
 
-    // Overflow-safe nrm2 test.
+    // Overflow-safe nrm2 test + Inf/NaN edge cases.
     keel::f64 huge[2] = {3e200, 4e200};
     CHECK(keel::abs(keel::linalg::nrm2(2, huge) - 5e200) < 1e188);
+    const keel::f64 inf_v = keel::Limits<keel::f64>::infinity();
+    const keel::f64 nan_v = keel::Limits<keel::f64>::quiet_nan();
+    keel::f64 inf_pair[2] = {inf_v, inf_v};
+    CHECK(keel::is_inf(keel::linalg::nrm2(2, inf_pair)));
+    keel::f64 nan_pair[2] = {inf_v, nan_v};
+    CHECK(keel::is_nan(keel::linalg::nrm2(2, nan_pair)));
 
     keel::linalg::scal(5, 3.0, x);
     CHECK(keel::abs(x[4] - 15.0) < 1e-12);
@@ -1010,6 +1018,84 @@ void test_matrix_functions_and_solvers() {
         keel::linalg::gsvd_values(A.data(), m, B.data(), p, n, sigmas.data());
         for (keel::usize i = 0; i + 1 < n; ++i) CHECK(sigmas[i] <= sigmas[i + 1]);
     }
+
+    // 6. Hardened matrix function edge cases: Jordan blocks in funm, high-norm expm/logm,
+    //    singular sylvester, large-t step-split expmv (n > 30), and NaN/Inf guards.
+    {
+        // 3x3 Jordan block [[2, 1, 0], [0, 2, 1], [0, 0, 2]] (column-major)
+        keel::c64 J3[9] = {
+            keel::c64(2.0, 0.0), keel::c64(0.0, 0.0), keel::c64(0.0, 0.0),
+            keel::c64(1.0, 0.0), keel::c64(2.0, 0.0), keel::c64(0.0, 0.0),
+            keel::c64(0.0, 0.0), keel::c64(1.0, 0.0), keel::c64(2.0, 0.0),
+        };
+        keel::c64 ExpJ3[9] = {};
+        keel::c64 SinJ3[9] = {};
+        CHECK(keel::linalg::funm(J3, 3, [](keel::c64 z) { return keel::exp(z); }, ExpJ3));
+        CHECK(keel::linalg::funm(J3, 3, [](keel::c64 z) { return keel::sin(z); }, SinJ3));
+        const keel::f64 e2 = keel::exp(2.0);
+        CHECK(keel::abs(ExpJ3[0] - keel::c64(e2, 0.0)) < 1e-11);
+        CHECK(keel::abs(ExpJ3[0 + 1 * 3] - keel::c64(e2, 0.0)) < 1e-11);
+        CHECK(keel::abs(ExpJ3[0 + 2 * 3] - keel::c64(0.5 * e2, 0.0)) < 1e-10);
+        const keel::f64 s2 = keel::sin(2.0);
+        const keel::f64 c2 = keel::cos(2.0);
+        CHECK(keel::abs(SinJ3[0] - keel::c64(s2, 0.0)) < 1e-11);
+        CHECK(keel::abs(SinJ3[0 + 1 * 3] - keel::c64(c2, 0.0)) < 1e-11);
+        CHECK(keel::abs(SinJ3[0 + 2 * 3] - keel::c64(-0.5 * s2, 0.0)) < 1e-10);
+
+        // High-norm expm + logm accuracy check
+        keel::f64 H[9] = {3.0, -1.5, 0.5, 2.0, -2.5, 1.0, -0.5, 1.2, 1.5};
+        keel::f64 ExpH[9] = {};
+        CHECK(keel::linalg::expm(H, 3, ExpH));
+        keel::c64 ExpHc[9], LogExpH[9], Hc[9];
+        for (keel::usize i = 0; i < 9; ++i) {
+            ExpHc[i] = keel::c64(ExpH[i], 0.0);
+            Hc[i] = keel::c64(H[i], 0.0);
+        }
+        CHECK(keel::linalg::logm(ExpHc, 3, LogExpH));
+        CHECK(max_diff(LogExpH, Hc, 9) < 1e-11);
+
+        // Singular logm (zero eigenvalue) returns false
+        keel::c64 Z[4] = {keel::c64(1.0, 0.0), keel::c64(0.0, 0.0), keel::c64(0.0, 0.0), keel::c64(0.0, 0.0)};
+        keel::c64 LogZ[4] = {};
+        CHECK(!keel::linalg::logm(Z, 2, LogZ));
+
+        // Non-finite expm returns false
+        keel::f64 BadA[4] = {1.0, keel::Limits<keel::f64>::quiet_nan(), 0.0, 1.0};
+        keel::f64 BadX[4] = {};
+        CHECK(!keel::linalg::expm(BadA, 2, BadX));
+
+        // Singular Sylvester operator (lambda_A + lambda_B == 0) returns false cleanly
+        keel::c64 SA[1] = {keel::c64(2.0, 0.0)};
+        keel::c64 SB[1] = {keel::c64(-2.0, 0.0)};
+        keel::c64 SC[1] = {keel::c64(1.0, 0.0)};
+        keel::c64 SX[1] = {};
+        CHECK(!keel::linalg::sylvester(SA, 1, SB, 1, SC, SX));
+
+        // Large-t step-split expmv on n = 40 (> Krylov m = 30) matches expm(t * A) * v
+        const keel::usize n40 = 40;
+        keel::Array<keel::f64> A40(n40 * n40, 0.0);
+        for (keel::usize j = 0; j < n40; ++j) {
+            for (keel::usize i = 0; i < n40; ++i) {
+                A40[i + j * n40] = 0.05 * det_val(i, j, 701);
+            }
+            A40[j + j * n40] -= 0.3;
+        }
+        keel::Array<keel::f64> v40(n40);
+        for (keel::usize i = 0; i < n40; ++i) v40[i] = det_val(i, 1, 702);
+        const keel::f64 t_big = 15.0;
+        keel::Array<keel::f64> tA40(n40 * n40), EtA40(n40 * n40), y_ref40(n40, 0.0), y_mv40(n40, 0.0);
+        for (keel::usize i = 0; i < n40 * n40; ++i) tA40[i] = t_big * A40[i];
+        CHECK(keel::linalg::expm(tA40.data(), n40, EtA40.data()));
+        keel::linalg::gemv(keel::linalg::MatrixTranspose::NoTrans, n40, n40, 1.0, EtA40.data(), n40, v40.data(), 1, 0.0, y_ref40.data(), 1);
+        CHECK(keel::linalg::expmv(t_big, A40.data(), n40, v40.data(), y_mv40.data()));
+        CHECK(max_diff(y_mv40.data(), y_ref40.data(), n40) < 1e-10);
+
+        // balance_matrix with NaN/Inf returns without hanging
+        keel::f64 Nb[4] = {1.0, keel::Limits<keel::f64>::infinity(), 2.0, 1.0};
+        keel::f64 d_nb[2] = {};
+        keel::linalg::balance_matrix(Nb, 2, false, d_nb);
+        CHECK(true);
+    }
 }
 
 void test_complex_gram_hermitian() {
@@ -1041,9 +1127,207 @@ void test_complex_gram_hermitian() {
     }
 }
 
+template <typename T>
+bool write_bin(keel::StringRef dir, keel::StringRef name, const T* ptr, keel::usize count) {
+    keel::String path = keel::format("{}/{}", dir, name);
+    keel::ArrayRef<keel::u8> bv(reinterpret_cast<const keel::u8*>(ptr), count * sizeof(T));
+    return keel::fs_write_file(path, bv).is_ok();
+}
+
+keel::i32 dump_reference(keel::StringRef dir) {
+    // 1. Real & complex GEMM
+    {
+        const keel::usize m = 73, n = 67, k = 59;
+        keel::Array<keel::f64> A(m * k), B(k * n), C(m * n, 0.0);
+        for (keel::usize i = 0; i < A.size(); ++i) A[i] = det_val(i, 1, 901);
+        for (keel::usize i = 0; i < B.size(); ++i) B[i] = det_val(i, 2, 902);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans,
+                           m, n, k, 1.3, A.data(), m, B.data(), k, 0.0, C.data(), m);
+        if (!write_bin(dir, "gemm_A.bin", A.data(), A.size())) return 2;
+        if (!write_bin(dir, "gemm_B.bin", B.data(), B.size())) return 2;
+        if (!write_bin(dir, "gemm_C.bin", C.data(), C.size())) return 2;
+    }
+
+    // 2. Square real solve (n = 140), complex inv (n = 18), tall QR solve (24x6)
+    {
+        const keel::usize n = 140, nrhs = 4;
+        keel::Array<keel::f64> A(n * n), B(n * nrhs), X(n * nrhs, 0.0);
+        for (keel::usize j = 0; j < n; ++j)
+            for (keel::usize i = 0; i < n; ++i)
+                A[i + j * n] = det_val(i, j, 910) + ((i == j) ? 15.0 : 0.0);
+        for (keel::usize i = 0; i < B.size(); ++i) B[i] = det_val(i, 3, 911);
+        if (!keel::linalg::la_solve(A.data(), n, n, B.data(), nrhs, X.data())) return 3;
+        if (!write_bin(dir, "solve_A.bin", A.data(), A.size())) return 2;
+        if (!write_bin(dir, "solve_B.bin", B.data(), B.size())) return 2;
+        if (!write_bin(dir, "solve_X.bin", X.data(), X.size())) return 2;
+
+        const keel::usize nc = 18;
+        keel::Array<keel::c64> Ac(nc * nc), Ac_inv(nc * nc);
+        for (keel::usize j = 0; j < nc; ++j)
+            for (keel::usize i = 0; i < nc; ++i)
+                Ac[i + j * nc] = det_cval(i, j, 912) + ((i == j) ? keel::c64(8.0, 1.0) : keel::c64(0.0, 0.0));
+        if (!keel::linalg::matrix_inv(Ac.data(), nc, Ac_inv.data())) return 3;
+        if (!write_bin(dir, "inv_Ac.bin", Ac.data(), Ac.size())) return 2;
+        if (!write_bin(dir, "inv_Ac_out.bin", Ac_inv.data(), Ac_inv.size())) return 2;
+
+        const keel::usize mt = 24, nt = 6;
+        keel::Array<keel::f64> At(mt * nt), bt(mt), xt(nt, 0.0);
+        for (keel::usize i = 0; i < At.size(); ++i) At[i] = det_val(i, 4, 913);
+        for (keel::usize i = 0; i < mt; ++i) bt[i] = det_val(i, 5, 914);
+        if (!keel::linalg::la_solve(At.data(), mt, nt, bt.data(), 1, xt.data())) return 3;
+        if (!write_bin(dir, "lstsq_A.bin", At.data(), At.size())) return 2;
+        if (!write_bin(dir, "lstsq_b.bin", bt.data(), bt.size())) return 2;
+        if (!write_bin(dir, "lstsq_x.bin", xt.data(), xt.size())) return 2;
+    }
+
+    // 3. Cholesky (n=90), SVD singular values (12x7 real & 4x7 complex), Symmetric & Generalized Eigenvalues
+    {
+        const keel::usize n = 90;
+        keel::Array<keel::f64> M(n * n), A(n * n, 0.0), R(n * n, 0.0);
+        for (keel::usize j = 0; j < n; ++j)
+            for (keel::usize i = 0; i < n; ++i)
+                M[i + j * n] = det_val(i, j, 920) + ((i == j) ? 5.0 : 0.0);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::Trans, keel::linalg::MatrixTranspose::NoTrans,
+                           n, n, n, 1.0, M.data(), n, M.data(), n, 0.0, A.data(), n);
+        if (keel::linalg::cholesky_upper(A.data(), R.data(), n) != 0) return 3;
+        if (!write_bin(dir, "chol_A.bin", A.data(), A.size())) return 2;
+        if (!write_bin(dir, "chol_R.bin", R.data(), R.size())) return 2;
+
+        const keel::usize ms = 12, ns = 7;
+        keel::Array<keel::f64> As(ms * ns), Us(ms * ms), Ss(ns), Vs(ns * ns);
+        for (keel::usize i = 0; i < As.size(); ++i) As[i] = det_val(i, 6, 921);
+        keel::linalg::svd_full(As.data(), ms, ns, Us.data(), Ss.data(), Vs.data());
+        if (!write_bin(dir, "svd_A.bin", As.data(), As.size())) return 2;
+        if (!write_bin(dir, "svd_S.bin", Ss.data(), Ss.size())) return 2;
+
+        const keel::usize ne = 24;
+        keel::Array<keel::f64> Ae(ne * ne), Ve(ne * ne), De(ne);
+        for (keel::usize j = 0; j < ne; ++j) {
+            for (keel::usize i = 0; i <= j; ++i) {
+                const keel::f64 v = det_val(i + j * ne, 7, 922);
+                Ae[i + j * ne] = Ae[j + i * ne] = v;
+            }
+        }
+        keel::linalg::eig_sym(Ae.data(), ne, Ve.data(), De.data());
+        if (!write_bin(dir, "eig_A.bin", Ae.data(), Ae.size())) return 2;
+        if (!write_bin(dir, "eig_D.bin", De.data(), De.size())) return 2;
+
+        // Generalized symmetric eigen (n = 10)
+        const keel::usize ng = 10;
+        keel::Array<keel::f64> G1(ng * ng), G2(ng * ng), Ag(ng * ng, 0.0), Bg(ng * ng, 0.0), Vg(ng * ng), Dg(ng);
+        for (keel::usize i = 0; i < ng * ng; ++i) {
+            G1[i] = det_val(i, 8, 923);
+            G2[i] = det_val(i, 9, 924);
+        }
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::Trans, keel::linalg::MatrixTranspose::NoTrans, ng, ng, ng, 1.0, G1.data(), ng, G1.data(), ng, 0.0, Ag.data(), ng);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::Trans, keel::linalg::MatrixTranspose::NoTrans, ng, ng, ng, 1.0, G2.data(), ng, G2.data(), ng, 0.0, Bg.data(), ng);
+        for (keel::usize i = 0; i < ng; ++i) { Ag[i + i * ng] += 5.0; Bg[i + i * ng] += 4.0; }
+        if (!keel::linalg::eig_sym_generalized(Ag.data(), Bg.data(), ng, Vg.data(), Dg.data())) return 3;
+        if (!write_bin(dir, "geig_A.bin", Ag.data(), Ag.size())) return 2;
+        if (!write_bin(dir, "geig_B.bin", Bg.data(), Bg.size())) return 2;
+        if (!write_bin(dir, "geig_D.bin", Dg.data(), Dg.size())) return 2;
+    }
+
+    // 4. Schur eigenvalues, QZ generalized eigenvalues, expm, logm, sqrtm, funm (general + Jordan), sylvester, expmv, lsqnonneg, rref, gsvd
+    {
+        const keel::usize n = 6;
+        keel::Array<keel::c64> A(n * n), B(n * n);
+        for (keel::usize i = 0; i < n * n; ++i) {
+            A[i] = det_cval(i, 1, 930);
+            B[i] = det_cval(i, 2, 931);
+        }
+        for (keel::usize i = 0; i < n; ++i) {
+            A[i + i * n] += keel::c64(4.0, 0.5);
+            B[i + i * n] += keel::c64(5.0, -0.3);
+        }
+        keel::Array<keel::c64> Us(n * n), Ts(n * n), AA(n * n), BB(n * n), Q(n * n), Z(n * n);
+        if (!keel::linalg::schur_complex(A.data(), n, Us.data(), Ts.data())) return 3;
+        if (!keel::linalg::qz_factor(A.data(), B.data(), n, AA.data(), BB.data(), Q.data(), Z.data())) return 3;
+        keel::Array<keel::c64> schur_eigs(n), qz_eigs(n);
+        for (keel::usize i = 0; i < n; ++i) {
+            schur_eigs[i] = Ts[i + i * n];
+            qz_eigs[i] = AA[i + i * n] / BB[i + i * n];
+        }
+        if (!write_bin(dir, "mf_A.bin", A.data(), A.size())) return 2;
+        if (!write_bin(dir, "mf_B.bin", B.data(), B.size())) return 2;
+        if (!write_bin(dir, "schur_eigs.bin", schur_eigs.data(), n)) return 2;
+        if (!write_bin(dir, "qz_eigs.bin", qz_eigs.data(), n)) return 2;
+
+        // High-norm real expm (n = 6, ||A||_1 > 25) + complex expm, logm, sqrtm, funm(sin)
+        keel::Array<keel::f64> Ar(n * n), ExpAr(n * n);
+        for (keel::usize i = 0; i < n * n; ++i) Ar[i] = 3.0 * det_val(i, 3, 932);
+        if (!keel::linalg::expm(Ar.data(), n, ExpAr.data())) return 3;
+        if (!write_bin(dir, "expm_Ar.bin", Ar.data(), Ar.size())) return 2;
+        if (!write_bin(dir, "expm_Ar_out.bin", ExpAr.data(), ExpAr.size())) return 2;
+
+        keel::Array<keel::c64> ExpA(n * n), LogA(n * n), SqrtA(n * n), SinA(n * n);
+        if (!keel::linalg::expm(A.data(), n, ExpA.data())) return 3;
+        if (!keel::linalg::logm(A.data(), n, LogA.data())) return 3;
+        if (!keel::linalg::sqrtm(A.data(), n, SqrtA.data())) return 3;
+        if (!keel::linalg::funm(A.data(), n, [](keel::c64 z) { return keel::sin(z); }, SinA.data())) return 3;
+        if (!write_bin(dir, "expm_Ac_out.bin", ExpA.data(), ExpA.size())) return 2;
+        if (!write_bin(dir, "logm_Ac_out.bin", LogA.data(), LogA.size())) return 2;
+        if (!write_bin(dir, "sqrtm_Ac_out.bin", SqrtA.data(), SqrtA.size())) return 2;
+        if (!write_bin(dir, "funm_sin_out.bin", SinA.data(), SinA.size())) return 2;
+
+        // Sylvester A*X + X*B = C (4x4, 3x3)
+        const keel::usize sm = 4, sn = 3;
+        keel::Array<keel::c64> SA(sm * sm), SB(sn * sn), SC(sm * sn), SX(sm * sn);
+        for (keel::usize i = 0; i < sm * sm; ++i) SA[i] = det_cval(i, 4, 933);
+        for (keel::usize i = 0; i < sm; ++i) SA[i + i * sm] += keel::c64(3.0, 0.0);
+        for (keel::usize i = 0; i < sn * sn; ++i) SB[i] = det_cval(i, 5, 934);
+        for (keel::usize i = 0; i < sn; ++i) SB[i + i * sn] += keel::c64(4.0, 0.0);
+        for (keel::usize i = 0; i < sm * sn; ++i) SC[i] = det_cval(i, 6, 935);
+        if (!keel::linalg::sylvester(SA.data(), sm, SB.data(), sn, SC.data(), SX.data())) return 3;
+        if (!write_bin(dir, "sylv_A.bin", SA.data(), SA.size())) return 2;
+        if (!write_bin(dir, "sylv_B.bin", SB.data(), SB.size())) return 2;
+        if (!write_bin(dir, "sylv_C.bin", SC.data(), SC.size())) return 2;
+        if (!write_bin(dir, "sylv_X.bin", SX.data(), SX.size())) return 2;
+
+        // expmv (n = 40, t = 15.0)
+        const keel::usize n40 = 40;
+        keel::Array<keel::f64> A40(n40 * n40), v40(n40), y40(n40);
+        for (keel::usize j = 0; j < n40; ++j) {
+            for (keel::usize i = 0; i < n40; ++i) A40[i + j * n40] = 0.05 * det_val(i, j, 940);
+            A40[j + j * n40] -= 0.3;
+        }
+        for (keel::usize i = 0; i < n40; ++i) v40[i] = det_val(i, 2, 941);
+        if (!keel::linalg::expmv(15.0, A40.data(), n40, v40.data(), y40.data())) return 3;
+        if (!write_bin(dir, "expmv_A.bin", A40.data(), A40.size())) return 2;
+        if (!write_bin(dir, "expmv_v.bin", v40.data(), v40.size())) return 2;
+        if (!write_bin(dir, "expmv_y.bin", y40.data(), y40.size())) return 2;
+
+        // lsqnonneg (10x5)
+        const keel::usize nm = 10, nn = 5;
+        keel::Array<keel::f64> NC(nm * nn), nd(nm), nx(nn);
+        for (keel::usize i = 0; i < NC.size(); ++i) NC[i] = det_val(i, 7, 942);
+        for (keel::usize i = 0; i < nm; ++i) nd[i] = det_val(i, 8, 943);
+        (void)keel::linalg::lsqnonneg(NC.data(), nm, nn, nd.data(), nx.data());
+        if (!write_bin(dir, "nnls_C.bin", NC.data(), NC.size())) return 2;
+        if (!write_bin(dir, "nnls_d.bin", nd.data(), nd.size())) return 2;
+        if (!write_bin(dir, "nnls_x.bin", nx.data(), nx.size())) return 2;
+
+        // gsvd_values (4x3, 3x3)
+        const keel::usize gm = 4, gp = 3, gn = 3;
+        keel::Array<keel::f64> GA(gm * gn), GB(gp * gn), gsig(gn);
+        for (keel::usize i = 0; i < GA.size(); ++i) GA[i] = det_val(i, 9, 944);
+        for (keel::usize i = 0; i < GB.size(); ++i) GB[i] = det_val(i, 10, 945);
+        keel::linalg::gsvd_values(GA.data(), gm, GB.data(), gp, gn, gsig.data());
+        if (!write_bin(dir, "gsvd_A.bin", GA.data(), GA.size())) return 2;
+        if (!write_bin(dir, "gsvd_B.bin", GB.data(), GB.size())) return 2;
+        if (!write_bin(dir, "gsvd_sig.bin", gsig.data(), gsig.size())) return 2;
+    }
+
+    return 0;
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc >= 3 && keel::StringRef(argv[1]) == "--dump-ref") {
+        return dump_reference(keel::StringRef(argv[2]));
+    }
+
     test_blas1();
     test_blas2();
     test_gemm();

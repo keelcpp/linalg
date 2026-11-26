@@ -702,7 +702,7 @@ static bool matrix_inv_impl(const T* A, usize n, T* A_inv, Allocator* alloc) noe
     for (usize i = 0; i < n; ++i) {
         eye[i + i * n] = T(1);
     }
-    return la_solve(A, n, n, eye.data(), n, A_inv, alloc);
+    return la_solve(A, n, n, eye.data(), n, A_inv, scratch.allocator());
 }
 
 bool matrix_inv(const f64* A, usize n, f64* A_inv, Allocator* alloc) noexcept {

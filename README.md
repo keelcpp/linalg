@@ -25,7 +25,7 @@ Dense linear algebra (BLAS Level 1/2/3, linear solvers, matrix decompositions, e
   - `hess_reduce`, `schur_real` (Francis double-shift QR + 2×2 standardization), `schur_complex`, `schur_eigenvectors`, `ordschur_complex`, `rsf2csf`, `cdf2rdf`.
   - `qz_factor` (Moler–Stewart complex QZ), `ordqz_complex`, `qz_eigenvectors`.
 - **Matrix Functions & Specialized Solvers**:
-  - `expm` (Padé-6 scaling & squaring), `sqrtm` (Schur–Björck–Hammarling), `logm` (Schur + inverse scaling & squaring), `funm` (Schur–Parlett), `sylvester` (Bartels–Stewart), `expmv` (Arnoldi Krylov).
+  - `expm` (Higham 2005 optimal Padé-3/5/7/9/13 scaling & squaring), `sqrtm` (Schur–Björck–Hammarling), `logm` (Schur + inverse scaling & squaring + 7-point Gauss–Legendre `[7/7]` Padé), `funm` (Davies–Higham blocked Schur–Parlett with Cauchy-contour confluent blocks), `sylvester` (Bartels–Stewart with singularity detection), `expmv` (step-split reorthogonalized Arnoldi Krylov).
   - `lsqnonneg` (Lawson–Hanson active-set NNLS), `rref` (Gauss–Jordan), `gsvd_values` & `gsvd_full`.
 
 ## Build & Test
@@ -34,4 +34,7 @@ Dense linear algebra (BLAS Level 1/2/3, linear solvers, matrix decompositions, e
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ctest --test-dir build --output-on-failure
+python tests/verify_reference.py build/Release/test_linalg.exe
 ```
+
+`tests/verify_reference.py` validates both Highway SIMD and scalar portable BLAS/LAPACK builds (GEMM, LU, solve, inv, Cholesky, QR, SVD, symmetric & generalized eigen, Schur, QZ, `expm`, `logm`, `sqrtm`, `funm` incl. Jordan blocks, `sylvester`, `expmv`, `lsqnonneg`, `rref`, `gsvd`) against NumPy / SciPy (`scipy.linalg`, `scipy.optimize.nnls`) and MATLAB R2025b.

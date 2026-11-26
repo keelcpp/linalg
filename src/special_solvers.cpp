@@ -216,6 +216,7 @@ NnlsStats lsqnonneg(const f64* C, usize m, usize n, const f64* d, f64* x, f64* r
 
     const usize max_outer = 3 * n;
     usize outer_iter = 0;
+    bool converged = false;
 
     auto recompute_residual = [&]() noexcept {
         for (usize i = 0; i < m; ++i) rd[i] = d[i];
@@ -236,7 +237,10 @@ NnlsStats lsqnonneg(const f64* C, usize m, usize n, const f64* d, f64* x, f64* r
                 t = j;
             }
         }
-        if (t == n) break;
+        if (t == n) {
+            converged = true;
+            break;
+        }
         ++outer_iter;
         in_z[t] = 0;
 
@@ -302,7 +306,7 @@ NnlsStats lsqnonneg(const f64* C, usize m, usize n, const f64* d, f64* x, f64* r
     }
 
     stats.iterations = outer_iter;
-    stats.converged = true;
+    stats.converged = converged;
     return stats;
 }
 

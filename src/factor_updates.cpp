@@ -134,6 +134,7 @@ void balance_scale(T* B, usize n, f64* d, usize low, usize high) noexcept {
                 r += keel::abs(B[i + j * n]);
                 c += keel::abs(B[j + i * n]);
             }
+            if (!keel::is_finite(r) || !keel::is_finite(c)) return;
             if (r == 0.0 || c == 0.0) continue;
 
             f64 g = r / kRadix;
