@@ -581,7 +581,8 @@ bool la_solve_impl(const T *A, keel::usize m, keel::usize n, const T *B, keel::u
     keel::ArenaTemp arena = keel::get_scratch(mr);
 
     if (m == n) {
-        if (n <= 96 && nrhs <= 96) {
+        constexpr keel::usize kSmallFastWork = 262144;
+        if (n <= 96 && (nrhs <= 96 || nrhs <= kSmallFastWork / (n * n))) {
             return la_solve_small_fastpath(A, m, B, m, X, m, n, nrhs);
         }
         keel::Array<T> A_lu(n * n, arena.allocator());
@@ -592,7 +593,7 @@ bool la_solve_impl(const T *A, keel::usize m, keel::usize n, const T *B, keel::u
         keel::mem_copy(X, B, n * nrhs * sizeof(T));
 
         const keel::i32 *piv_ptr = piv.data();
-        const keel::usize p_thresh = (nrhs >= 64) ? 32 : (nrhs + 1);
+        const keel::usize p_thresh = (nrhs >= 64 && nrhs >= 65536 / n) ? 32 : (nrhs + 1);
         keel::linalg::linalg_detail::parallel_for(nrhs, p_thresh, [=](keel::usize c_start, keel::usize c_end) {
             for (keel::usize col = c_start; col < c_end; ++col) {
                 T *col_ptr = X + col * n;
@@ -605,7 +606,8 @@ bool la_solve_impl(const T *A, keel::usize m, keel::usize n, const T *B, keel::u
             }
         });
 
-        keel::linalg::linalg_detail::parallel_for(nrhs, (nrhs >= 64) ? 16 : 1, [=, &A_lu](keel::usize c_start, keel::usize c_end) {
+        const keel::usize s_thresh = (nrhs >= 16 && (n >= 512 || nrhs >= 262144 / (n * n))) ? 16 : (nrhs + 1);
+        keel::linalg::linalg_detail::parallel_for(nrhs, s_thresh, [=, &A_lu](keel::usize c_start, keel::usize c_end) {
             keel::usize cols = c_end - c_start;
             T* X_slice = X + c_start * n;
             trsm_L_blocked_seq(n, cols, A_lu.data(), n, X_slice, n);

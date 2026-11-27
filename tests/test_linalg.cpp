@@ -309,6 +309,39 @@ void test_solve_lu_inv() {
         CHECK(max_diff(x.data(), x_true.data(), n) < 1e-11);
     }
 
+    // Small-n wide-RHS solves (real 2x2 with nrhs=1000, complex 3x3 with nrhs=257)
+    // exercising the single-threaded fastpath and non-multiple-of-4 cleanup tail.
+    {
+        constexpr keel::usize n = 2;
+        constexpr keel::usize nrhs = 1000;
+        const keel::f64 A[4] = {0.5, 2.0, 1.0, 1.5}; // forces row pivot
+        keel::Array<keel::f64> X_true(n * nrhs);
+        keel::Array<keel::f64> B(n * nrhs, 0.0);
+        keel::Array<keel::f64> X(n * nrhs, 0.0);
+        for (keel::usize i = 0; i < n * nrhs; ++i) X_true[i] = det_val(i, 5, 73);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans,
+                           n, nrhs, n, 1.0, A, n, X_true.data(), n, 0.0, B.data(), n);
+        CHECK(keel::linalg::la_solve(A, n, n, B.data(), nrhs, X.data()));
+        CHECK(max_diff(X.data(), X_true.data(), n * nrhs) < 1e-12);
+    }
+    {
+        constexpr keel::usize n = 3;
+        constexpr keel::usize nrhs = 257;
+        keel::Array<keel::c64> A(n * n);
+        for (keel::usize j = 0; j < n; ++j)
+            for (keel::usize i = 0; i < n; ++i)
+                A[i + j * n] = det_cval(i, j, 77) + ((i == j) ? keel::c64(4.0, -1.0) : keel::c64(0.0, 0.0));
+        keel::Array<keel::c64> X_true(n * nrhs);
+        keel::Array<keel::c64> B(n * nrhs, keel::c64(0.0, 0.0));
+        keel::Array<keel::c64> X(n * nrhs, keel::c64(0.0, 0.0));
+        for (keel::usize i = 0; i < n * nrhs; ++i) X_true[i] = det_cval(i, 3, 79);
+        keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans, keel::linalg::MatrixTranspose::NoTrans,
+                           n, nrhs, n, keel::c64(1.0, 0.0), A.data(), n, X_true.data(), n,
+                           keel::c64(0.0, 0.0), B.data(), n);
+        CHECK(keel::linalg::la_solve(A.data(), n, n, B.data(), nrhs, X.data()));
+        CHECK(max_diff(X.data(), X_true.data(), n * nrhs) < 1e-12);
+    }
+
     // Singular matrix returns false.
     {
         keel::f64 S[4] = {1.0, 2.0, 2.0, 4.0};
